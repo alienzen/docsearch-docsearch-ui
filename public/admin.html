@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>DocSearch — Administration</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
+    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
+              display: flex; align-items: center; gap: 16px; }
+    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
+    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex;
+                 flex-direction: column; gap: 24px; }
+
+    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
+    .panel h2 { font-size: 16px; margin-bottom: 14px; color: #1a1a18; }
+    .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                   gap: 12px; }
+    .status-card { border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px; }
+    .status-card .name { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .status-card .value { font-size: 15px; font-weight: 600; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+    .dot.up { background: #1f9254; }
+    .dot.down { background: #c92a2a; }
+    .dot.warn { background: #e8990c; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+    th { color: #888; font-weight: 500; font-size: 12px; }
+    input[type=text], input[type=number] { padding: 5px 8px; border: 1px solid #d5d5ce;
+                                            border-radius: 6px; font-size: 13px; width: 100%; }
+    input[type=checkbox] { width: 16px; height: 16px; }
+
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .row input[type=text] { flex: 1; }
+
+    button { padding: 6px 14px; background: #185FA5; color: #fff; border: none;
+             border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button.secondary { background: #eee; color: #333; }
+    button.danger { background: #c92a2a; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag { background: #ececfd; color: #3C3489; padding: 4px 10px; border-radius: 12px;
+           font-size: 12px; display: flex; align-items: center; gap: 6px; }
+    .tag button { background: none; color: #3C3489; padding: 0; font-size: 14px; line-height: 1; }
+
+    .muted { color: #888; font-size: 12px; }
+    .error-banner { background: #fff0f0; border: 1px solid #f5c2c2; color: #a12a2a;
+                    padding: 14px 18px; border-radius: 8px; }
+    .save-hint { font-size: 11px; color: #1f9254; margin-left: 8px; opacity: 0; transition: opacity .3s; }
+    .save-hint.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <span class="logo">DocSearch — Administration</span>
+    <a href="/">← Recherche</a>
+  </header>
+
+  <div class="container" id="app">
+    <p class="muted">Chargement…</p>
+  </div>
+
+  <script>
+    const $app = document.getElementById('app');
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(body.detail || `Erreur ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    }
+
+    function statusDot(up) {
+      if (up === true) return '<span class="dot up"></span>';
+      if (up === false) return '<span class="dot down"></span>';
+      return '<span class="dot warn"></span>';
+    }
+
+    // ── Rendu de l'état des composants ─────────────────────────
+    async function renderStatus() {
+      const s = await api('/admin/status');
+      const tika = s.tika || {};
+      const workers = s.workers || {};
+      const watcher = s.watcher || {};
+
+      return `
+        <div class="panel">
+          <h2>État des composants <small>rafraîchi toutes les 5s</small></h2>
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="name">Elasticsearch</div>
+              <div class="value">${statusDot(s.elasticsearch?.up)}${s.elasticsearch?.status || (s.elasticsearch?.up ? 'up' : 'down')}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Redis</div>
+              <div class="value">${statusDot(s.redis?.up)}${s.redis?.up ? 'up' : 'down'}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Kafka</div>
+              <div class="value">${statusDot(s.kafka?.up)}${s.kafka?.up ? 'up' : 'down'}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Tika</div>
+              <div class="value">${statusDot(tika.up_count > 0)}${tika.up_count ?? '?'}/${tika.total ?? '?'} instances</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Workers actifs</div>
+              <div class="value">${statusDot(workers.active_workers > 0)}${workers.active_workers ?? '?'}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Watcher</div>
+              <div class="value">${statusDot(watcher.alive)}${watcher.alive ? 'actif' : 'silencieux'}</div>
+              <div class="muted">${watcher.last_seen_seconds_ago != null ? `vu il y a ${watcher.last_seen_seconds_ago}s` : ''}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">File d'indexation</div>
+              <div class="value">${workers.pending_documents ?? '?'}</div>
+              <div class="muted">document(s) en attente de traitement</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ── Types de fichiers ───────────────────────────────────────
+    async function renderFiletypes() {
+      const cfg = await api('/admin/filetypes');
+      const rows = Object.entries(cfg).map(([ext, rule]) => `
+        <tr data-ext="${ext}">
+          <td>${ext}</td>
+          <td><input type="checkbox" class="ft-enabled" ${rule.enabled ? 'checked' : ''} /></td>
+          <td><input type="number" class="ft-size" value="${rule.max_size_mb ?? ''}" min="0" step="1" /></td>
+          <td><button class="secondary ft-save">Enregistrer</button><span class="save-hint">✓ enregistré</span></td>
+        </tr>`).join('');
+
+      return `
+        <div class="panel">
+          <h2>Types de fichiers</h2>
+          <table>
+            <thead><tr><th>Extension</th><th>Activé</th><th>Taille max (Mo)</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="row" style="margin-top:14px;">
+            <input type="text" id="new-ext" placeholder="nouvelle extension (ex: jpg)" />
+            <input type="number" id="new-ext-size" placeholder="Mo" style="max-width:90px;" />
+            <button id="add-ext">Ajouter</button>
+          </div>
+        </div>`;
+    }
+
+    function wireFiletypes() {
+      document.querySelectorAll('.ft-save').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const ext = tr.dataset.ext;
+          const enabled = tr.querySelector('.ft-enabled').checked;
+          const max_size_mb = parseFloat(tr.querySelector('.ft-size').value) || null;
+          await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled, max_size_mb }) });
+          const hint = e.target.nextElementSibling;
+          hint.classList.add('show');
+          setTimeout(() => hint.classList.remove('show'), 1500);
+        });
+      });
+      document.getElementById('add-ext')?.addEventListener('click', async () => {
+        const ext = document.getElementById('new-ext').value.trim().replace(/^\./, '');
+        const size = parseFloat(document.getElementById('new-ext-size').value) || null;
+        if (!ext) return;
+        await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled: true, max_size_mb: size }) });
+        await refresh();
+      });
+    }
+
+    // ── Paramètres opérationnels ────────────────────────────────
+    async function renderConfig() {
+      const cfg = await api('/admin/config');
+      const rows = Object.entries(cfg).map(([key, value]) => `
+        <tr data-key="${key}">
+          <td>${key}</td>
+          <td><input type="number" class="cfg-value" value="${value}" /></td>
+          <td><button class="secondary cfg-save">Enregistrer</button><span class="save-hint">✓ enregistré</span></td>
+        </tr>`).join('');
+
+      return `
+        <div class="panel">
+          <h2>Paramètres opérationnels <small>effectifs sous ~10s, sans redémarrage</small></h2>
+          <table>
+            <thead><tr><th>Paramètre</th><th>Valeur</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function wireConfig() {
+      document.querySelectorAll('.cfg-save').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const key = tr.dataset.key;
+          const value = tr.querySelector('.cfg-value').value;
+          await api(`/admin/config/${key}`, { method: 'POST', body: JSON.stringify({ value }) });
+          const hint = e.target.nextElementSibling;
+          hint.classList.add('show');
+          setTimeout(() => hint.classList.remove('show'), 1500);
+        });
+      });
+    }
+
+    // ── Filtres de chemin ───────────────────────────────────────
+    async function renderPathFilters() {
+      const cfg = await api('/admin/path-filters');
+      const tag = (p, kind) => `<span class="tag">${p}<button data-pattern="${p}" data-kind="${kind}" class="rm-filter">✕</button></span>`;
+      return `
+        <div class="panel">
+          <h2>Filtres de sous-dossiers <small>motifs glob, relatifs à DOCS_FOLDER</small></h2>
+
+          <div class="muted">Liste noire (exclus)</div>
+          <div class="tag-list" id="excluded-tags">${(cfg.excluded || []).map(p => tag(p, 'excluded')).join('') || '<span class="muted">aucune</span>'}</div>
+
+          <div class="muted" style="margin-top:14px;">Liste blanche (si non vide, seuls ces chemins sont indexés)</div>
+          <div class="tag-list" id="included-tags">${(cfg.included || []).map(p => tag(p, 'included')).join('') || '<span class="muted">aucune — tout est indexé sauf la liste noire</span>'}</div>
+
+          <div class="row" style="margin-top:16px;">
+            <input type="text" id="new-pattern" placeholder="ex: finance/confidentiel ou */tmp" />
+            <button id="add-exclude" class="secondary">Exclure</button>
+            <button id="add-include" class="secondary">Inclure (liste blanche)</button>
+          </div>
+
+          <hr style="margin:16px 0;border:none;border-top:1px solid #eee;" />
+
+          <div class="muted">Purger l'index existant selon un motif</div>
+          <div class="row" style="margin-top:8px;">
+            <input type="text" id="purge-pattern" placeholder="motif à purger" />
+            <button id="purge-preview" class="secondary">Aperçu</button>
+          </div>
+          <div id="purge-result" class="muted"></div>
+        </div>`;
+    }
+
+    function wirePathFilters() {
+      document.querySelectorAll('.rm-filter').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          await api('/admin/path-filters/remove', { method: 'POST', body: JSON.stringify({ pattern: e.target.dataset.pattern }) });
+          await refresh();
+        });
+      });
+      document.getElementById('add-exclude')?.addEventListener('click', async () => {
+        const pattern = document.getElementById('new-pattern').value.trim();
+        if (!pattern) return;
+        await api('/admin/path-filters/exclude', { method: 'POST', body: JSON.stringify({ pattern }) });
+        await refresh();
+      });
+      document.getElementById('add-include')?.addEventListener('click', async () => {
+        const pattern = document.getElementById('new-pattern').value.trim();
+        if (!pattern) return;
+        await api('/admin/path-filters/include', { method: 'POST', body: JSON.stringify({ pattern }) });
+        await refresh();
+      });
+
+      let lastPreviewPattern = null;
+      document.getElementById('purge-preview')?.addEventListener('click', async () => {
+        const pattern = document.getElementById('purge-pattern').value.trim();
+        if (!pattern) return;
+        const resultEl = document.getElementById('purge-result');
+        const res = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern, dry_run: true }) });
+        lastPreviewPattern = pattern;
+        resultEl.innerHTML = `${res.matched} document(s) correspondent à '${pattern}'. ` +
+          (res.matched > 0 ? `<button id="purge-confirm" class="danger" style="margin-left:8px;">Confirmer la suppression</button>` : '');
+        document.getElementById('purge-confirm')?.addEventListener('click', async () => {
+          if (!confirm(`Supprimer définitivement ${res.matched} document(s) de l'index (les fichiers sur le disque ne sont pas touchés) ?`)) return;
+          const real = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern: lastPreviewPattern, dry_run: false }) });
+          resultEl.textContent = `${real.matched} document(s) supprimé(s) de l'index.`;
+        });
+      });
+    }
+
+    // ── Déclenchement d'un scan ─────────────────────────────────
+    function renderScan() {
+      return `
+        <div class="panel">
+          <h2>Indexation</h2>
+          <p class="muted">Publie les fichiers sur Kafka pour indexation par les workers actifs — ne bloque pas, suivre la progression dans "État des composants" ci-dessus.</p>
+          <div class="row" style="margin-top:12px;">
+            <input type="text" id="scan-subfolder" placeholder="sous-dossier (vide = tout DOCS_FOLDER)" />
+            <button id="scan-launch">Lancer un scan</button>
+          </div>
+          <div id="scan-result" class="muted"></div>
+        </div>`;
+    }
+
+    function wireScan() {
+      document.getElementById('scan-launch')?.addEventListener('click', async () => {
+        const subfolder = document.getElementById('scan-subfolder').value.trim() || null;
+        const btn = document.getElementById('scan-launch');
+        btn.disabled = true;
+        try {
+          const res = await api('/admin/scan', { method: 'POST', body: JSON.stringify({ subfolder }) });
+          document.getElementById('scan-result').textContent =
+            `Scan démarré (${res.subfolder}). Suivre la progression dans "État des composants".`;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // ── Orchestration ───────────────────────────────────────────
+    async function refresh() {
+      try {
+        const [statusHtml, filetypesHtml, configHtml, pathFiltersHtml] = await Promise.all([
+          renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
+        ]);
+        $app.innerHTML = statusHtml + filetypesHtml + configHtml + pathFiltersHtml + renderScan();
+        wireFiletypes();
+        wireConfig();
+        wirePathFilters();
+        wireScan();
+      } catch (e) {
+        if (e.status === 401 || e.status === 403) {
+          $app.innerHTML = `<div class="error-banner"><strong>Accès refusé.</strong> ${e.message}</div>`;
+        } else {
+          $app.innerHTML = `<div class="error-banner">Erreur de chargement : ${e.message}</div>`;
+        }
+      }
+    }
+
+    async function refreshStatusOnly() {
+      // Rafraîchissement léger périodique (juste les indicateurs d'état,
+      // pas les panneaux de configuration qu'on ne veut pas réécraser
+      // pendant que l'utilisateur les édite).
+      const statusPanel = document.querySelector('.panel');
+      if (!statusPanel) return;
+      try {
+        statusPanel.outerHTML = await renderStatus();
+      } catch (e) { /* silencieux — le prochain cycle réessaiera */ }
+    }
+
+    refresh();
+    setInterval(refreshStatusOnly, 5000);
+  </script>
+</body>
+</html>
