@@ -98,7 +98,7 @@
       const watcher = s.watcher || {};
 
       return `
-        <div class="panel">
+        <div class="panel" id="status-panel">
           <h2>État des composants <small>rafraîchi toutes les 5s</small></h2>
           <div class="status-grid">
             <div class="status-card">
@@ -132,6 +132,49 @@
               <div class="muted">document(s) en attente de traitement</div>
             </div>
           </div>
+        </div>`;
+    }
+
+    // ── Métriques d'indexation (documents, taille, répartition) ──
+    async function renderMetrics() {
+      const m = await api('/metrics');
+      const totalExt = (m.by_extension || []).reduce((s, b) => s + b.doc_count, 0) || 1;
+      const rows = (m.by_extension || []).map(b => {
+        const pct = Math.round((b.doc_count / totalExt) * 100);
+        return `
+          <tr>
+            <td>${b.key || '(sans extension)'}</td>
+            <td style="text-align:right;">${b.doc_count.toLocaleString('fr-FR')}</td>
+            <td style="width:40%;">
+              <div style="background:#eee;border-radius:4px;overflow:hidden;height:8px;">
+                <div style="background:#185FA5;height:100%;width:${pct}%;"></div>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div class="panel" id="metrics-panel">
+          <h2>Métriques d'indexation</h2>
+          <div class="status-grid" style="margin-bottom:16px;">
+            <div class="status-card">
+              <div class="name">Documents indexés</div>
+              <div class="value">${(m.indexed ?? 0).toLocaleString('fr-FR')}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Taille de l'index</div>
+              <div class="value">${m.size_gb ?? '?'} Go</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Version Elasticsearch</div>
+              <div class="value">${m.es_version ?? '?'}</div>
+            </div>
+          </div>
+          <div class="muted" style="margin-bottom:6px;">Répartition par extension</div>
+          <table>
+            <thead><tr><th>Extension</th><th style="text-align:right;">Documents</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucun document indexé.</td></tr>'}</tbody>
+          </table>
         </div>`;
     }
 
@@ -317,10 +360,10 @@
     // ── Orchestration ───────────────────────────────────────────
     async function refresh() {
       try {
-        const [statusHtml, filetypesHtml, configHtml, pathFiltersHtml] = await Promise.all([
-          renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
+        const [statusHtml, metricsHtml, filetypesHtml, configHtml, pathFiltersHtml] = await Promise.all([
+          renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
         ]);
-        $app.innerHTML = statusHtml + filetypesHtml + configHtml + pathFiltersHtml + renderScan();
+        $app.innerHTML = statusHtml + metricsHtml + filetypesHtml + configHtml + pathFiltersHtml + renderScan();
         wireFiletypes();
         wireConfig();
         wirePathFilters();
@@ -335,13 +378,19 @@
     }
 
     async function refreshStatusOnly() {
-      // Rafraîchissement léger périodique (juste les indicateurs d'état,
-      // pas les panneaux de configuration qu'on ne veut pas réécraser
-      // pendant que l'utilisateur les édite).
-      const statusPanel = document.querySelector('.panel');
-      if (!statusPanel) return;
+      // Rafraîchissement léger périodique (état des composants +
+      // métriques d'indexation seulement) — pas les panneaux de
+      // configuration, qu'on ne veut pas réécraser pendant que
+      // l'utilisateur les édite. Ciblage par id (pas par position :
+      // '.panel' seul serait ambigu maintenant que plusieurs panneaux
+      // read-only coexistent).
+      const statusPanel  = document.getElementById('status-panel');
+      const metricsPanel = document.getElementById('metrics-panel');
+      if (!statusPanel || !metricsPanel) return;
       try {
-        statusPanel.outerHTML = await renderStatus();
+        const [statusHtml, metricsHtml] = await Promise.all([renderStatus(), renderMetrics()]);
+        statusPanel.outerHTML  = statusHtml;
+        metricsPanel.outerHTML = metricsHtml;
       } catch (e) { /* silencieux — le prochain cycle réessaiera */ }
     }
 
