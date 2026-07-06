@@ -90,6 +90,16 @@
       return '<span class="dot warn"></span>';
     }
 
+    function clusterStatusDot(status) {
+      // Couleur du point basée sur le statut réel du cluster ES
+      // (green/yellow/red), pas juste up/down — un cluster "yellow"
+      // est up mais dégradé, ça doit se voir.
+      if (status === 'green')  return '<span class="dot up"></span>';
+      if (status === 'yellow') return '<span class="dot warn"></span>';
+      if (status === 'red')    return '<span class="dot down"></span>';
+      return '<span class="dot warn"></span>';
+    }
+
     // ── Rendu de l'état des composants ─────────────────────────
     async function renderStatus() {
       const s = await api('/admin/status');
@@ -103,7 +113,7 @@
           <div class="status-grid">
             <div class="status-card">
               <div class="name">Elasticsearch</div>
-              <div class="value">${statusDot(s.elasticsearch?.up)}${s.elasticsearch?.status || (s.elasticsearch?.up ? 'up' : 'down')}</div>
+              <div class="value">${s.elasticsearch?.up ? clusterStatusDot(s.elasticsearch.status) : statusDot(false)}${s.elasticsearch?.status || (s.elasticsearch?.up ? 'up' : 'down')}</div>
             </div>
             <div class="status-card">
               <div class="name">Redis</div>
