@@ -9,30 +9,54 @@
     body { font-family: system-ui, sans-serif; background: #f5f5f3; height: 100vh;
            display: flex; flex-direction: column; }
     .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 12px 24px;
-              display: flex; align-items: center; justify-content: space-between; }
+              display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .logo { font-size: 15px; font-weight: 600; color: #185FA5; }
+    .demo-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 3px 10px;
+                  border-radius: 99px; font-weight: 500; }
     .messages { flex: 1; overflow-y: auto; padding: 24px; max-width: 800px;
                 margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px; }
     .msg { display: flex; gap: 10px; }
     .msg.user { flex-direction: row-reverse; }
-    .bubble { max-width: 75%; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+    .bubble { max-width: 75%; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
     .bubble.ai   { background: #fff; border: 1px solid #e5e5e0; }
     .bubble.user { background: #185FA5; color: #fff; }
+    .bubble.ai .src { display: block; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0ec;
+                      font-size: 12px; color: #888; }
+    .bubble.ai .src a { color: #185FA5; text-decoration: none; }
+    .typing { display: inline-flex; gap: 3px; padding: 4px 0; }
+    .typing span { width: 6px; height: 6px; border-radius: 50%; background: #bbb;
+                   animation: bounce 1.2s infinite ease-in-out; }
+    .typing span:nth-child(2) { animation-delay: 0.15s; }
+    .typing span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
     .input-area { border-top: 1px solid #e5e5e0; background: #fff; padding: 16px 24px; }
     .input-row { max-width: 800px; margin: 0 auto; display: flex; gap: 10px; }
     .input-row input { flex: 1; padding: 11px 14px; border-radius: 10px;
                        border: 1px solid #d5d5ce; font-size: 14px; }
+    .input-row input:focus { outline: none; border-color: #185FA5; }
     .send-btn { padding: 0 20px; border-radius: 10px; border: none;
-                background: #185FA5; color: #fff; cursor: pointer; }
+                background: #185FA5; color: #fff; cursor: pointer; font-size: 14px; }
+    .send-btn:hover { background: #0C447C; }
+    .suggestions { max-width: 800px; margin: 0 auto 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .suggestion-chip { font-size: 12px; padding: 5px 12px; border-radius: 99px; border: 1px solid #d5d5ce;
+                       background: #fff; color: #555; cursor: pointer; }
+    .suggestion-chip:hover { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; }
   </style>
 </head>
 <body>
   <header class="header">
     <span class="logo">DocSearch — Assistant IA</span>
-    <a href="/" style="font-size:13px;color:#555;">← Retour à la recherche</a>
+    <span class="demo-badge">Aperçu — réponses de démonstration</span>
+    <a href="/" style="font-size:13px;color:#555;margin-left:auto;">← Retour à la recherche</a>
   </header>
 
   <div class="messages" id="messages"></div>
+
+  <div class="suggestions" id="suggestions">
+    <span class="suggestion-chip" onclick="ask('Quels documents parlent du budget 2024 ?')">Quels documents parlent du budget 2024 ?</span>
+    <span class="suggestion-chip" onclick="ask('Qui a écrit le dernier rapport RH ?')">Qui a écrit le dernier rapport RH ?</span>
+    <span class="suggestion-chip" onclick="ask('Résume le contenu du dossier Finance')">Résume le dossier Finance</span>
+  </div>
 
   <div class="input-area">
     <div class="input-row">
@@ -43,34 +67,80 @@
   </div>
 
   <script>
-    function addMsg(role, text) {
+    // ── Démonstration — aucun backend RAG réel n'est appelé ici ────
+    // /ask n'existe pas côté docsearch-api (le RAG est une évolution
+    // optionnelle, voir docsearch-docs/proposition_docsearch.docx).
+    // Cette page simule une conversation plausible avec des réponses
+    // toutes faites, pour donner un aperçu de l'expérience visée sans
+    // faire croire à une fonctionnalité réellement branchée.
+
+    const CANNED_RESPONSES = [
+      {
+        match: /budget|financ|finance/i,
+        answer: "D'après les documents indexés, le <strong>Budget prévisionnel 2024</strong> (Finance/Budgets, par Claire Martin) compare les prévisions aux chiffres réalisés de 2023, avec un écart global de +2,4%. Le <strong>Rapport annuel 2023</strong> (Finance/Rapports) détaille une croissance de 12% du chiffre d'affaires.",
+        sources: ["Budget prévisionnel 2024 vs réalisé 2023", "Rapport annuel 2023 — Direction financière"],
+      },
+      {
+        match: /rh|ressources humaines|effectif/i,
+        answer: "Le document le plus récent du dossier RH est la <strong>Synthèse rapport annuel 2023 — RH</strong>, rédigée par Sophie Bernard. Il indique une progression des effectifs de 8% et un taux de turnover stable à 4,2%.",
+        sources: ["Synthèse rapport annuel 2023 — RH"],
+      },
+      {
+        match: /qui a écrit|auteur/i,
+        answer: "Les documents les plus fréquemment mis à jour proviennent principalement de <strong>Martin Dupont</strong> (Direction/Finance) et <strong>Sophie Bernard</strong> (RH/Juridique). Voulez-vous que je filtre par auteur dans la recherche ?",
+        sources: [],
+      },
+      {
+        match: /résum|synthé/i,
+        answer: "Voici une synthèse basée sur les documents du dossier concerné : plusieurs rapports abordent la clôture de l'exercice 2023, avec une tendance à la hausse des indicateurs clés et quelques points d'attention identifiés lors de l'audit interne.",
+        sources: ["Audit interne — exercice 2023"],
+      },
+    ];
+
+    const DEFAULT_RESPONSE = "Je n'ai pas trouvé de réponse précise à cette question dans les documents indexés pour cette démonstration. Essayez une des suggestions ci-dessus, ou utilisez la <a href=\"/\">recherche classique</a> pour explorer le corpus complet.";
+
+    function addMsg(role, html) {
       const box = document.getElementById('messages');
       const div = document.createElement('div');
       div.className = 'msg ' + (role === 'user' ? 'user' : '');
-      div.innerHTML = `<div class="bubble ${role}">${text}</div>`;
+      div.innerHTML = `<div class="bubble ${role}">${html}</div>`;
       box.appendChild(div);
       box.scrollTop = box.scrollHeight;
+      return div;
     }
 
-    async function send() {
+    function findResponse(question) {
+      const match = CANNED_RESPONSES.find(r => r.match.test(question));
+      if (!match) return { answer: DEFAULT_RESPONSE, sources: [] };
+      return match;
+    }
+
+    async function ask(question) {
+      document.getElementById('q').value = '';
+      addMsg('user', question);
+
+      const typingDiv = addMsg('ai', '<div class="typing"><span></span><span></span><span></span></div>');
+
+      // Délai simulé — donne un rythme de conversation réaliste plutôt
+      // qu'une réponse instantanée qui trahirait immédiatement le
+      // caractère fictif de la démonstration.
+      await new Promise(r => setTimeout(r, 700 + Math.random() * 600));
+
+      const { answer, sources } = findResponse(question);
+      const sourcesHtml = sources.length
+        ? `<span class="src">Sources : ${sources.map(s => `<a href="/">${s}</a>`).join(', ')}</span>`
+        : '';
+      typingDiv.querySelector('.bubble').innerHTML = answer + sourcesHtml;
+    }
+
+    function send() {
       const input = document.getElementById('q');
       const q = input.value.trim();
       if (!q) return;
-      input.value = '';
-      addMsg('user', q);
-      addMsg('ai', '…');
-
-      try {
-        const res  = await fetch(`/ask?question=${encodeURIComponent(q)}`, { method: 'POST' });
-        const data = await res.json();
-        document.querySelectorAll('.bubble.ai').forEach(b => { if (b.textContent === '…') b.remove(); });
-        addMsg('ai', data.answer || 'Pas de réponse.');
-      } catch (e) {
-        addMsg('ai', "Erreur : l'assistant IA (RAG) n'est pas encore déployé sur cet environnement.");
-      }
+      ask(q);
     }
 
-    addMsg('ai', 'Bonjour ! Posez-moi une question sur vos documents indexés.');
+    addMsg('ai', "Bonjour ! Je suis une démonstration de l'assistant IA envisagé pour DocSearch (option RAG). Mes réponses ici sont des exemples préparés à l'avance, pas une vraie recherche dans vos documents — utilisez les suggestions ci-dessous ou la <a href=\"/\">recherche classique</a> pour une vraie requête.");
   </script>
 </body>
 </html>
