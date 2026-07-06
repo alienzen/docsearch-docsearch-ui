@@ -144,7 +144,7 @@
     <div class="layout">
       <aside class="sidebar">
         <div class="facet-section">
-          <div class="facet-title">Période</div>
+          <div class="facet-title">Période (modification)</div>
           <div class="date-range">
             <label for="date-from">Du</label>
             <input type="date" id="date-from" onchange="applyDateRange()" />
@@ -172,7 +172,7 @@
             Trier par :
             <select id="sort" onchange="doSearch()">
               <option value="_score">Pertinence</option>
-              <option value="date">Date</option>
+              <option value="date_modified">Date de modification</option>
               <option value="filename">Nom</option>
               <option value="size">Taille</option>
             </select>
@@ -282,7 +282,7 @@
               <div class="result-title">${r.title || r.filename}</div>
               <div class="result-meta">
                 ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-                <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date ? r.date.slice(0,10) : '—'}</span>
+                <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
                 ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
                 <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
                 ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
@@ -431,7 +431,8 @@
         ${previewBanner}
         <div style="margin-top:16px;">
           <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
-          <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Date</span><span class="v">${doc.date ? doc.date.slice(0,10) : '—'}</span></div>
+          <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
+          <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span><span class="v">${doc.folder || '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-file" aria-hidden="true"></i>Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
           ${isArchiveMember ? `<div class="modal-row"><span class="k"><i class="ti ti-file-zip" aria-hidden="true"></i>Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
