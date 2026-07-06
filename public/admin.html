@@ -369,22 +369,36 @@
 
     // ── Orchestration ───────────────────────────────────────────
     async function refresh() {
-      try {
-        const [statusHtml, metricsHtml, filetypesHtml, configHtml, pathFiltersHtml] = await Promise.all([
-          renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        ]);
-        $app.innerHTML = statusHtml + metricsHtml + filetypesHtml + configHtml + pathFiltersHtml + renderScan();
-        wireFiletypes();
-        wireConfig();
-        wirePathFilters();
-        wireScan();
-      } catch (e) {
-        if (e.status === 401 || e.status === 403) {
-          $app.innerHTML = `<div class="error-banner"><strong>Accès refusé.</strong> ${e.message}</div>`;
-        } else {
-          $app.innerHTML = `<div class="error-banner">Erreur de chargement : ${e.message}</div>`;
-        }
+      const labels = ['État des composants', "Métriques d'indexation", 'Types de fichiers',
+                      'Paramètres opérationnels', 'Filtres de sous-dossiers'];
+      const results = await Promise.allSettled([
+        renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
+      ]);
+
+      // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
+      // même contrôle d'accès a échoué pour toutes (appliqué
+      // uniformément à /admin/*) — un seul bandeau plein écran est plus
+      // clair que cinq messages "Accès refusé" redondants.
+      const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
+      const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
+      if (authFailure) {
+        $app.innerHTML = `<div class="error-banner"><strong>Accès refusé.</strong> ${authFailure.message}</div>`;
+        return;
       }
+
+      // Sinon, chaque panneau affiche son propre message d'erreur à sa
+      // place — un index ES absent (503) n'empêche pas les panneaux de
+      // configuration (Redis, sans rapport) de s'afficher normalement.
+      $app.innerHTML = results.map((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
+      ).join('') + renderScan();
+
+      wireFiletypes();
+      wireConfig();
+      wirePathFilters();
+      wireScan();
     }
 
     async function refreshStatusOnly() {
@@ -397,11 +411,13 @@
       const statusPanel  = document.getElementById('status-panel');
       const metricsPanel = document.getElementById('metrics-panel');
       if (!statusPanel || !metricsPanel) return;
-      try {
-        const [statusHtml, metricsHtml] = await Promise.all([renderStatus(), renderMetrics()]);
-        statusPanel.outerHTML  = statusHtml;
-        metricsPanel.outerHTML = metricsHtml;
-      } catch (e) { /* silencieux — le prochain cycle réessaiera */ }
+
+      const [statusResult, metricsResult] = await Promise.allSettled([renderStatus(), renderMetrics()]);
+      // allSettled : un échec sur l'un des deux (ex: index ES absent
+      // pour les métriques) ne doit pas empêcher l'autre panneau de
+      // se rafraîchir normalement.
+      if (statusResult.status === 'fulfilled')  statusPanel.outerHTML  = statusResult.value;
+      if (metricsResult.status === 'fulfilled') metricsPanel.outerHTML = metricsResult.value;
     }
 
     refresh();
