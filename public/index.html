@@ -20,6 +20,9 @@
     .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: #0C447C; }
+    .btn-reset { padding: 8px 14px; border-radius: 8px; border: 1px solid #d5d5ce;
+                 background: #fff; color: #666; cursor: pointer; font-size: 13px; }
+    .btn-reset:hover { background: #f5f5f3; color: #333; }
     .header-links { display: flex; gap: 16px; align-items: center; margin-left: auto; }
     .header-links a { font-size: 14px; text-decoration: none; }
 
@@ -132,6 +135,7 @@
         <option value="filepath">Chemin</option>
       </select>
       <button class="btn-primary" onclick="doSearch()">Rechercher</button>
+      <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
     </div>
     <div class="header-links">
       <a href="/chat" style="color:#185FA5;">Assistant IA →</a>
@@ -337,20 +341,37 @@
 
     function goPage(n) { state.page = n; doSearch(); }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
     function renderFacets(facets) {
       if (!facets) return;
 
       const authorsBox = document.getElementById('facet-authors');
       authorsBox.innerHTML = (facets.authors || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.author === f.key ? ' active' : ''}" onclick="toggleFacet('author', ${JSON.stringify(f.key)})">
+        <div class="facet-row${state.author === f.key ? ' active' : ''}" data-facet-type="author" data-facet-value="${escapeHtml(f.key)}">
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun auteur</div>';
 
       const foldersBox = document.getElementById('facet-folders');
       foldersBox.innerHTML = (facets.folders || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.folder === f.key ? ' active' : ''}" onclick="toggleFacet('folder', ${JSON.stringify(f.key)})">
+        <div class="facet-row${state.folder === f.key ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}">
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun dossier</div>';
+
+      // Gestionnaires attachés après le rendu plutôt qu'un onclick
+      // interpolé directement dans le HTML (l'ancienne version cassait
+      // le HTML dès qu'un nom d'auteur/dossier contenait un guillemet,
+      // via JSON.stringify() injecté dans un attribut déjà délimité
+      // par des guillemets doubles).
+      document.querySelectorAll('#facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
+        row.addEventListener('click', () => toggleFacet(row.dataset.facetType, row.dataset.facetValue));
+      });
     }
 
     function toggleFacet(type, value) {
@@ -406,6 +427,32 @@
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
+    }
+
+    function resetSearch() {
+      // Remise à zéro complète — contrairement à clearAllFilters() (qui
+      // ne touche qu'auteur/dossier/période), ceci efface aussi la
+      // requête elle-même, le type de fichier, le tri, le champ ciblé,
+      // et ramène l'affichage à l'état initial (aucune recherche lancée).
+      state = { ext: 'all', author: null, folder: null, dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+
+      document.getElementById('q').value = '';
+      document.getElementById('scope').value = 'all';
+      document.getElementById('sort').value = '_score';
+      document.getElementById('date-from').value = '';
+      document.getElementById('date-to').value = '';
+
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      const allChip = document.querySelector('.chip[data-ext="all"]');
+      if (allChip) allChip.classList.add('active');
+
+      document.getElementById('result-count').textContent = 'Entrez une recherche';
+      document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
+      document.getElementById('pagination').innerHTML = '';
+      document.getElementById('active-filters').innerHTML = '';
+      document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
+      document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
+      document.getElementById('clear-all').style.display = 'none';
     }
 
     async function openDetail(id) {
