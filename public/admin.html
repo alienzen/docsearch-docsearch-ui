@@ -197,13 +197,14 @@
           <td><input type="checkbox" class="ft-enabled" ${rule.enabled ? 'checked' : ''} /></td>
           <td><input type="number" class="ft-size" value="${rule.max_size_mb ?? ''}" min="0" step="1" /></td>
           <td><button class="secondary ft-save">Enregistrer</button><span class="save-hint">✓ enregistré</span></td>
+          <td>${ext === 'default' ? '' : '<button class="danger ft-delete">Supprimer</button>'}</td>
         </tr>`).join('');
 
       return `
         <div class="panel">
           <h2>Types de fichiers</h2>
           <table>
-            <thead><tr><th>Extension</th><th>Activé</th><th>Taille max (Mo)</th><th></th></tr></thead>
+            <thead><tr><th>Extension</th><th>Activé</th><th>Taille max (Mo)</th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
@@ -225,6 +226,15 @@
           const hint = e.target.nextElementSibling;
           hint.classList.add('show');
           setTimeout(() => hint.classList.remove('show'), 1500);
+        });
+      });
+      document.querySelectorAll('.ft-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const ext = tr.dataset.ext;
+          if (!confirm(`Supprimer l'extension .${ext} ? Elle ne sera plus indexée.`)) return;
+          await api(`/admin/filetypes/${ext}`, { method: 'DELETE' });
+          await refresh();
         });
       });
       document.getElementById('add-ext')?.addEventListener('click', async () => {
