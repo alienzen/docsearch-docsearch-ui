@@ -270,6 +270,9 @@
             <thead><tr><th>Paramètre</th><th>Valeur</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
+          <div class="row" style="margin-top:14px;">
+            <button id="reset-config" class="secondary">Charger les paramètres par défaut</button>
+          </div>
         </div>`;
     }
 
@@ -284,6 +287,11 @@
           hint.classList.add('show');
           setTimeout(() => hint.classList.remove('show'), 1500);
         });
+      });
+      document.getElementById('reset-config')?.addEventListener('click', async () => {
+        if (!confirm("Charger les paramètres par défaut ? Tout réglage personnalisé sera écrasé.")) return;
+        await api('/admin/config/reset', { method: 'POST' });
+        await refresh();
       });
     }
 
