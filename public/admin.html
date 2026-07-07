@@ -211,6 +211,7 @@
             <input type="text" id="new-ext" placeholder="nouvelle extension (ex: jpg)" />
             <input type="number" id="new-ext-size" placeholder="Mo" style="max-width:90px;" />
             <button id="add-ext">Ajouter</button>
+            <button id="reset-filetypes" class="secondary">Charger les extensions par défaut</button>
           </div>
         </div>`;
     }
@@ -242,6 +243,11 @@
         const size = parseFloat(document.getElementById('new-ext-size').value) || null;
         if (!ext) return;
         await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled: true, max_size_mb: size }) });
+        await refresh();
+      });
+      document.getElementById('reset-filetypes')?.addEventListener('click', async () => {
+        if (!confirm("Charger les extensions par défaut ? Toute extension ajoutée et tout réglage personnalisé (activation, taille max) seront écrasés.")) return;
+        await api('/admin/filetypes/reset', { method: 'POST' });
         await refresh();
       });
     }
