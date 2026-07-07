@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>DocSearch — Statistiques de recherche</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
+    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
+              display: flex; align-items: center; gap: 16px; }
+    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
+    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex;
+                 flex-direction: column; gap: 24px; }
+
+    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
+    .panel h2 { font-size: 16px; margin-bottom: 14px; color: #1a1a18; }
+    .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                   gap: 12px; margin-bottom: 16px; }
+    .status-card { border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px; }
+    .status-card .name { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .status-card .value { font-size: 20px; font-weight: 600; }
+
+    .day-bars { display: flex; align-items: flex-end; gap: 6px; height: 90px; }
+    .day-bar { flex: 1; display: flex; flex-direction: column; align-items: center;
+               justify-content: flex-end; height: 100%; }
+    .day-bar .bar { width: 100%; background: #185FA5; border-radius: 3px 3px 0 0; min-height: 2px; }
+    .day-bar .label { font-size: 10px; color: #888; margin-top: 4px; white-space: nowrap; }
+    .day-bar .count { font-size: 10px; color: #333; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+    th { color: #888; font-weight: 500; font-size: 12px; }
+    td.mono { font-family: ui-monospace, monospace; font-size: 12px; }
+
+    input[type=text] { padding: 5px 8px; border: 1px solid #d5d5ce;
+                        border-radius: 6px; font-size: 13px; width: 100%; }
+
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .row input[type=text] { flex: 1; }
+
+    button { padding: 6px 14px; background: #185FA5; color: #fff; border: none;
+             border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button.secondary { background: #eee; color: #333; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .pager { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+    .pager .muted { flex: 1; }
+
+    .muted { color: #888; font-size: 12px; }
+    .error-banner { background: #fff0f0; border: 1px solid #f5c2c2; color: #a12a2a;
+                    padding: 14px 18px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <span class="logo">DocSearch — Statistiques de recherche</span>
+    <a href="/admin.html">← Administration</a>
+  </header>
+
+  <div class="container" id="app">
+    <p class="muted">Chargement…</p>
+  </div>
+
+  <script>
+    const $app = document.getElementById('app');
+    const PAGE_SIZE = 50;
+    let currentFrom = 0;
+    let filters = { user: '', q: '' };
+
+    async function api(path) {
+      const res = await fetch(path);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(body.detail || `Erreur ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    }
+
+    function fmtDate(iso) {
+      const d = new Date(iso);
+      return isNaN(d) ? iso : d.toLocaleString('fr-FR');
+    }
+
+    function fmtResults(files) {
+      if (!files || !files.length) return '<span class="muted">—</span>';
+      const shown = files.filter(Boolean).slice(0, 3);
+      const rest  = files.length - shown.length;
+      return shown.join(', ') + (rest > 0 ? ` <span class="muted">+${rest}</span>` : '');
+    }
+
+    // ── Cartes de résumé + répartition par jour ──────────────────
+    async function renderSummary() {
+      const s = await api('/admin/search-logs/summary');
+      const maxCount = Math.max(1, ...s.by_day.map(b => b.count));
+      const bars = s.by_day.map(b => `
+        <div class="day-bar">
+          <div class="count">${b.count}</div>
+          <div class="bar" style="height:${Math.round((b.count / maxCount) * 100)}%;"></div>
+          <div class="label">${b.date.slice(5)}</div>
+        </div>`).join('');
+
+      return `
+        <div class="panel">
+          <h2>Vue d'ensemble</h2>
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="name">Recherches effectuées</div>
+              <div class="value">${s.total_searches.toLocaleString('fr-FR')}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Utilisateurs distincts</div>
+              <div class="value">${s.unique_users}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Adresses IP distinctes</div>
+              <div class="value">${s.unique_ips}</div>
+            </div>
+          </div>
+          ${s.by_day.length ? `
+            <div class="muted" style="margin-bottom:8px;">Recherches par jour (14 derniers jours)</div>
+            <div class="day-bars">${bars}</div>
+          ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}
+        </div>`;
+    }
+
+    // ── Table des recherches ──────────────────────────────────────
+    async function renderLogs() {
+      const params = new URLSearchParams({ size: PAGE_SIZE, from: currentFrom });
+      if (filters.user) params.set('username', filters.user);
+      if (filters.q)    params.set('q', filters.q);
+
+      const res = await api(`/admin/search-logs?${params}`);
+      const rows = res.results.map(r => `
+        <tr>
+          <td>${fmtDate(r.timestamp)}</td>
+          <td>${r.username || '<span class="muted">—</span>'}</td>
+          <td class="mono">${r.ip || '<span class="muted">—</span>'}</td>
+          <td>${r.query || ''}</td>
+          <td>${r.total_results ?? 0}</td>
+          <td>${fmtResults(r.result_files)}</td>
+        </tr>`).join('');
+
+      const from = res.total === 0 ? 0 : currentFrom + 1;
+      const to   = Math.min(currentFrom + PAGE_SIZE, res.total);
+
+      return `
+        <div class="panel">
+          <h2>Historique des recherches</h2>
+          <div class="row">
+            <input type="text" id="filter-user" placeholder="Filtrer par utilisateur" value="${filters.user}" />
+            <input type="text" id="filter-q" placeholder="Filtrer par mot-clé de la requête" value="${filters.q}" />
+            <button id="apply-filters">Filtrer</button>
+            <button id="reset-filters" class="secondary">Réinitialiser</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Date / heure</th><th>Utilisateur</th><th>IP</th><th>Requête</th><th>Résultats</th><th>Documents retournés</th></tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
+          </table>
+          <div class="pager">
+            <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
+            <button id="prev-page" class="secondary" ${currentFrom === 0 ? 'disabled' : ''}>← Précédent</button>
+            <button id="next-page" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
+          </div>
+        </div>`;
+    }
+
+    function wireLogs() {
+      document.getElementById('apply-filters')?.addEventListener('click', () => {
+        filters.user = document.getElementById('filter-user').value.trim();
+        filters.q    = document.getElementById('filter-q').value.trim();
+        currentFrom = 0;
+        refreshLogs();
+      });
+      document.getElementById('reset-filters')?.addEventListener('click', () => {
+        filters = { user: '', q: '' };
+        currentFrom = 0;
+        refreshLogs();
+      });
+      document.getElementById('prev-page')?.addEventListener('click', () => {
+        currentFrom = Math.max(0, currentFrom - PAGE_SIZE);
+        refreshLogs();
+      });
+      document.getElementById('next-page')?.addEventListener('click', () => {
+        currentFrom += PAGE_SIZE;
+        refreshLogs();
+      });
+    }
+
+    async function refreshLogs() {
+      const panel = document.getElementById('logs-panel');
+      const html = await renderLogs();
+      if (panel) {
+        panel.outerHTML = html.replace('<div class="panel">', '<div class="panel" id="logs-panel">');
+      }
+      wireLogs();
+    }
+
+    async function refresh() {
+      const results = await Promise.allSettled([renderSummary(), renderLogs()]);
+
+      const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
+      const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
+      if (authFailure) {
+        $app.innerHTML = `<div class="error-banner"><strong>Accès refusé.</strong> ${authFailure.message}</div>`;
+        return;
+      }
+
+      const labels = ["Vue d'ensemble", 'Historique des recherches'];
+      $app.innerHTML = results.map((r, i) =>
+        r.status === 'fulfilled'
+          ? (i === 1 ? r.value.replace('<div class="panel">', '<div class="panel" id="logs-panel">') : r.value)
+          : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
+      ).join('');
+
+      wireLogs();
+    }
+
+    refresh();
+  </script>
+</body>
+</html>
