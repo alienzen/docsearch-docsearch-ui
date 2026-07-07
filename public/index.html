@@ -15,6 +15,8 @@
     .search-wrap input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
                          border-radius: 8px; font-size: 15px; outline: none; }
     .search-wrap input:focus { border-color: #185FA5; }
+    .scope-select { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
+                    font-size: 13px; background: #fff; color: #555; cursor: pointer; }
     .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: #0C447C; }
@@ -123,6 +125,11 @@
     <div class="search-wrap">
       <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
              onkeydown="if(event.key==='Enter')doSearch()" />
+      <select id="scope" class="scope-select" title="Restreindre la recherche à un champ précis">
+        <option value="all">Tout</option>
+        <option value="title">Titre</option>
+        <option value="author">Auteur</option>
+      </select>
       <button class="btn-primary" onclick="doSearch()">Rechercher</button>
     </div>
     <div class="header-links">
@@ -256,6 +263,7 @@
         folder: state.folder,
         date_from: state.dateFrom,
         date_to: state.dateTo,
+        search_in: document.getElementById('scope').value,
       };
 
       const box = document.getElementById('results');
