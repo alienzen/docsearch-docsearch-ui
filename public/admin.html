@@ -16,8 +16,14 @@
                  flex-direction: column; gap: 24px; }
 
     .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
-    .panel h2 { font-size: 16px; margin-bottom: 14px; color: #1a1a18; }
     .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                     font-size: 16px; color: #1a1a18; margin: 0; cursor: pointer; user-select: none; }
+    .accordion-caret { font-size: 11px; color: #888; flex-shrink: 0; transition: transform 0.15s; }
+    .panel.collapsed .accordion-caret { transform: rotate(-90deg); }
+    .panel-body { margin-top: 14px; }
+    .panel.collapsed .panel-body { display: none; }
 
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; }
@@ -71,6 +77,29 @@
   <script>
     const $app = document.getElementById('app');
 
+    // ── Accordéon ────────────────────────────────────────────────
+    // État tenu à part du HTML régénéré à chaque refresh() (toutes les
+    // 5s pour État des composants/Métriques, ou après chaque action) —
+    // sans ça, replier une section serait annulé au prochain
+    // rafraîchissement. Rien de replié par défaut.
+    const collapsedPanels = new Set();
+
+    function toggleAccordion(id) {
+      if (collapsedPanels.has(id)) collapsedPanels.delete(id); else collapsedPanels.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedPanels.has(id));
+    }
+
+    function panelWrap(id, title, subtitle, bodyHtml) {
+      return `
+        <div class="panel${collapsedPanels.has(id) ? ' collapsed' : ''}" id="${id}">
+          <h2 class="panel-header" onclick="toggleAccordion('${id}')">
+            <span>${title}${subtitle ? ` <small>${subtitle}</small>` : ''}</span>
+            <span class="accordion-caret">▾</span>
+          </h2>
+          <div class="panel-body">${bodyHtml}</div>
+        </div>`;
+    }
+
     async function api(path, options = {}) {
       const res = await fetch(path, {
         headers: { 'Content-Type': 'application/json' },
@@ -115,9 +144,7 @@
           <td style="text-align:right;">${(info.indexed ?? 0).toLocaleString('fr-FR')}</td>
         </tr>`).join('');
 
-      return `
-        <div class="panel" id="status-panel">
-          <h2>État des composants <small>rafraîchi toutes les 5s</small></h2>
+      const body = `
           <div class="status-grid">
             <div class="status-card">
               <div class="name">Elasticsearch</div>
@@ -154,8 +181,8 @@
           <table>
             <thead><tr><th>Source</th><th>Index</th><th style="text-align:right;">Documents</th></tr></thead>
             <tbody>${sourceRows || '<tr><td colspan="3" class="muted">Aucune source.</td></tr>'}</tbody>
-          </table>
-        </div>`;
+          </table>`;
+      return panelWrap('status-panel', 'État des composants', 'rafraîchi toutes les 5s', body);
     }
 
     // ── Métriques d'indexation (documents, taille, répartition) ──
@@ -176,9 +203,7 @@
           </tr>`;
       }).join('');
 
-      return `
-        <div class="panel" id="metrics-panel">
-          <h2>Métriques d'indexation</h2>
+      const body = `
           <div class="status-grid" style="margin-bottom:16px;">
             <div class="status-card">
               <div class="name">Documents indexés</div>
@@ -197,8 +222,8 @@
           <table>
             <thead><tr><th>Extension</th><th style="text-align:right;">Documents</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="3" class="muted">Aucun document indexé.</td></tr>'}</tbody>
-          </table>
-        </div>`;
+          </table>`;
+      return panelWrap('metrics-panel', "Métriques d'indexation", null, body);
     }
 
     // ── Types de fichiers ───────────────────────────────────────
@@ -214,9 +239,7 @@
           <td>${ext === 'default' ? '' : '<button class="danger ft-delete">Supprimer</button>'}</td>
         </tr>`).join('');
 
-      return `
-        <div class="panel">
-          <h2>Types de fichiers <small>par source — chaque source a sa propre configuration</small></h2>
+      const body = `
           <div class="row">
             <label class="muted" for="filetype-source">Source :</label>
             <select id="filetype-source">${sourceOptions(selectedFiletypeSource)}</select>
@@ -230,8 +253,8 @@
             <input type="number" id="new-ext-size" placeholder="Mo" style="max-width:90px;" />
             <button id="add-ext">Ajouter</button>
             <button id="reset-filetypes" class="secondary">Charger les extensions par défaut</button>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('filetypes-panel', 'Types de fichiers', 'par source — chaque source a sa propre configuration', body);
     }
 
     function wireFiletypes() {
@@ -284,17 +307,15 @@
           <td><button class="secondary cfg-save">Enregistrer</button><span class="save-hint">✓ enregistré</span></td>
         </tr>`).join('');
 
-      return `
-        <div class="panel">
-          <h2>Paramètres opérationnels <small>effectifs sous ~10s, sans redémarrage</small></h2>
+      const body = `
           <table>
             <thead><tr><th>Paramètre</th><th>Valeur</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
             <button id="reset-config" class="secondary">Charger les paramètres par défaut</button>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('config-panel', 'Paramètres opérationnels', 'effectifs sous ~10s, sans redémarrage', body);
     }
 
     function wireConfig() {
@@ -342,9 +363,7 @@
           <td>${name === 'documents' ? '' : '<button class="danger src-delete">Retirer</button>'}</td>
         </tr>`).join('');
 
-      return `
-        <div class="panel">
-          <h2>Sources <small>un répertoire indexé = un index Elasticsearch dédié</small></h2>
+      const body = `
           <table>
             <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
@@ -360,8 +379,8 @@
             Créez d'abord le sous-dossier sur l'hôte (SOURCES_ROOT/&lt;nom&gt;), puis enregistrez-le
             ici — le watcher commence à l'observer sous ~5s, sans redémarrage. Lancez ensuite
             l'indexation initiale avec le panneau "Indexation" ci-dessous.
-          </p>
-        </div>`;
+          </p>`;
+      return panelWrap('sources-panel', 'Sources', 'un répertoire indexé = un index Elasticsearch dédié', body);
     }
 
     function wireSources() {
@@ -389,10 +408,7 @@
       if (!sourcesCache[selectedFilterSource]) selectedFilterSource = 'documents';
       const cfg = await api(`/admin/path-filters?source=${encodeURIComponent(selectedFilterSource)}`);
       const tag = (p, kind) => `<span class="tag">${p}<button data-pattern="${p}" data-kind="${kind}" class="rm-filter">✕</button></span>`;
-      return `
-        <div class="panel">
-          <h2>Filtres de sous-dossiers <small>motifs glob, relatifs au dossier de la source</small></h2>
-
+      const body = `
           <div class="row">
             <label class="muted" for="filter-source">Source :</label>
             <select id="filter-source">${sourceOptions(selectedFilterSource)}</select>
@@ -417,8 +433,8 @@
             <input type="text" id="purge-pattern" placeholder="motif à purger" />
             <button id="purge-preview" class="secondary">Aperçu</button>
           </div>
-          <div id="purge-result" class="muted"></div>
-        </div>`;
+          <div id="purge-result" class="muted"></div>`;
+      return panelWrap('pathfilters-panel', 'Filtres de sous-dossiers', 'motifs glob, relatifs au dossier de la source', body);
     }
 
     function wirePathFilters() {
@@ -465,9 +481,7 @@
     // ── Déclenchement d'un scan ─────────────────────────────────
     function renderScan() {
       if (!sourcesCache[selectedScanSource]) selectedScanSource = 'documents';
-      return `
-        <div class="panel">
-          <h2>Indexation</h2>
+      const body = `
           <p class="muted">Publie les fichiers d'UNE source sur Kafka pour indexation par les workers actifs (pool partagé entre toutes les sources) — ne bloque pas, suivre la progression dans "État des composants" ci-dessus.</p>
           <div class="row" style="margin-top:12px;">
             <label class="muted" for="scan-source">Source :</label>
@@ -475,8 +489,8 @@
             <input type="text" id="scan-subfolder" placeholder="sous-dossier (vide = dossier complet)" />
             <button id="scan-launch">Lancer un scan</button>
           </div>
-          <div id="scan-result" class="muted"></div>
-        </div>`;
+          <div id="scan-result" class="muted"></div>`;
+      return panelWrap('scan-panel', 'Indexation', null, body);
     }
 
     function wireScan() {
