@@ -70,7 +70,7 @@
     const $app = document.getElementById('app');
     const PAGE_SIZE = 50;
     let currentFrom = 0;
-    let filters = { user: '', q: '' };
+    let filters = { q: '' };
 
     async function api(path) {
       const res = await fetch(path);
@@ -133,8 +133,7 @@
     // ── Table des recherches ──────────────────────────────────────
     async function renderLogs() {
       const params = new URLSearchParams({ size: PAGE_SIZE, from: currentFrom });
-      if (filters.user) params.set('username', filters.user);
-      if (filters.q)    params.set('q', filters.q);
+      if (filters.q) params.set('q', filters.q);
 
       const res = await api(`/admin/search-logs?${params}`);
       const rows = res.results.map(r => `
@@ -153,7 +152,6 @@
         <div class="panel">
           <h2>Historique des recherches</h2>
           <div class="row">
-            <input type="text" id="filter-user" placeholder="Filtrer par utilisateur" value="${filters.user}" />
             <input type="text" id="filter-q" placeholder="Filtrer par mot-clé de la requête" value="${filters.q}" />
             <button id="apply-filters">Filtrer</button>
             <button id="reset-filters" class="secondary">Réinitialiser</button>
@@ -174,13 +172,12 @@
 
     function wireLogs() {
       document.getElementById('apply-filters')?.addEventListener('click', () => {
-        filters.user = document.getElementById('filter-user').value.trim();
-        filters.q    = document.getElementById('filter-q').value.trim();
+        filters.q = document.getElementById('filter-q').value.trim();
         currentFrom = 0;
         refreshLogs();
       });
       document.getElementById('reset-filters')?.addEventListener('click', () => {
-        filters = { user: '', q: '' };
+        filters = { q: '' };
         currentFrom = 0;
         refreshLogs();
       });

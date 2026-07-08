@@ -102,6 +102,9 @@
     .result-title { font-size: 15px; font-weight: 600; color: #185FA5; margin-bottom: 4px; }
     .result-meta { display: flex; gap: 14px; font-size: 12px; color: #888; flex-wrap: wrap; }
     .result-meta span { display: flex; align-items: center; gap: 4px; }
+    .source-badge { display: flex; align-items: center; gap: 5px; }
+    .source-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center;
+                  justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
     .highlight { background: #FFF200; color: #1a1a18; padding: 0 3px; border-radius: 3px; font-weight: 600; }
     .snippet { font-size: 13px; color: #555; line-height: 1.65; margin-top: 8px;
                border-left: 3px solid #E6F1FB; padding-left: 12px; }
@@ -272,6 +275,29 @@
       '.txt':  { bg:'#F1EFE8', color:'#444441' },
     };
 
+    // Les sources (sources_config.py côté API) sont un ensemble ouvert,
+    // enregistré dynamiquement — pas de palette fixe possible comme
+    // EXT_COLORS. On dérive une couleur stable par simple hachage du
+    // nom : la même source garde toujours la même couleur d'une
+    // recherche à l'autre, sans avoir besoin de connaître la liste des
+    // sources à l'avance.
+    const SOURCE_PALETTE = [
+      { bg:'#E6F1FB', color:'#0C447C' },
+      { bg:'#EAF3DE', color:'#27500A' },
+      { bg:'#EEEDFE', color:'#3C3489' },
+      { bg:'#FFF3E0', color:'#B34000' },
+      { bg:'#FCEBEB', color:'#A32D2D' },
+      { bg:'#FAEEDA', color:'#633806' },
+      { bg:'#E0F7F5', color:'#0A6B62' },
+      { bg:'#FDE8F3', color:'#8C1D6B' },
+    ];
+
+    function sourceColor(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+      return SOURCE_PALETTE[hash % SOURCE_PALETTE.length];
+    }
+
     let state = {
       ext: 'all', author: null, folder: null, source: null, dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
@@ -358,6 +384,15 @@
         const archiveNote = isArchiveMember
           ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
           : '';
+        const sourceNote = r.source
+          ? (() => {
+              const sc = sourceColor(r.source);
+              return `<span class="source-badge" title="Source : ${escapeHtml(r.source)}">
+                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(r.source.charAt(0).toUpperCase())}</span>
+                ${escapeHtml(r.source)}
+              </span>`;
+            })()
+          : '';
         return `
         <div class="result-card" onclick="openDetail('${r.id}')">
           <div class="result-header">
@@ -365,6 +400,7 @@
             <div style="flex:1;min-width:0;">
               <div class="result-title">${r.title || r.filename}</div>
               <div class="result-meta">
+                ${sourceNote}
                 ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
                 <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
                 ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
