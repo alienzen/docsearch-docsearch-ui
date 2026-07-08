@@ -51,13 +51,6 @@
     .saved-item-delete:hover { background: #fff0f0; color: #c92a2a; }
 
     .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
-    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
-    .filter-label { font-size: 12px; color: #888; }
-    .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 10px;
-            border-radius: 99px; border: 1px solid #d5d5ce; color: #555; cursor: pointer;
-            background: #fff; transition: background 0.15s; }
-    .chip.active { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; font-weight: 500; }
-    .chip:hover:not(.active) { background: #f5f5f3; }
     .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; min-height: 24px; }
     .active-filter-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
                           padding: 4px 6px 4px 12px; border-radius: 99px; background: #E6F1FB; color: #185FA5; }
@@ -182,20 +175,14 @@
   </header>
 
   <div class="container">
-    <div class="filters">
-      <span class="filter-label">Type :</span>
-      <span class="chip active" data-ext="all" onclick="toggleChip(this,'all')">Tous</span>
-      <span class="chip" data-ext="pdf" onclick="toggleChip(this,'pdf')">PDF</span>
-      <span class="chip" data-ext="word" onclick="toggleChip(this,'word')">Word</span>
-      <span class="chip" data-ext="excel" onclick="toggleChip(this,'excel')">Excel</span>
-      <span class="chip" data-ext="ppt" onclick="toggleChip(this,'ppt')">PowerPoint</span>
-      <span class="chip" data-ext="pst" onclick="toggleChip(this,'pst')">Email</span>
-      <span class="chip" data-ext="txt" onclick="toggleChip(this,'txt')">Texte</span>
-    </div>
     <div class="active-filters" id="active-filters"></div>
 
     <div class="layout">
       <aside class="sidebar">
+        <div class="facet-section">
+          <div class="facet-title">Type de fichier</div>
+          <div id="facet-extensions"><div class="facet-empty">Lancez une recherche</div></div>
+        </div>
         <div class="facet-section">
           <div class="facet-title">Période (modification)</div>
           <div class="date-range">
@@ -253,16 +240,6 @@
     // Un chip "Word"/"Excel"/"PowerPoint" doit couvrir à la fois le
     // format moderne et l'ancien format binaire 97-2003 — sinon
     // sélectionner "Word" exclurait silencieusement les .doc.
-    const EXT_FAMILIES = {
-      pdf:   ['pdf'],
-      word:  ['docx', 'doc'],
-      excel: ['xlsx', 'xls'],
-      ppt:   ['pptx', 'ppt'],
-      pst:   ['pst'],
-      txt:   ['txt'],
-    };
-
-    const EXT_LABELS      = { pdf: 'PDF', word: 'Word', excel: 'Excel', ppt: 'PowerPoint', pst: 'Email', txt: 'Texte' };
     const SEARCH_IN_LABELS = { title: 'Titre', author: 'Auteur', filepath: 'Chemin' };
     const SORT_LABELS     = { date_modified: 'Date de modification', filename: 'Nom', size: 'Taille' };
 
@@ -300,8 +277,10 @@
 
     let state = {
       // ext/author/source : sélection cumulative (plusieurs valeurs à la
-      // fois, combinées en OR côté ES) — folder reste mono-sélection.
-      // ext vide = chip "Tous" (aucun filtre de type).
+      // fois, combinées en OR côté ES), au même titre que les facettes
+      // "Source" et "Auteur" — folder reste mono-sélection. ext stocke
+      // directement les valeurs brutes du champ ES (".pdf", ".docx"...),
+      // identiques aux clés retournées par facets.extensions.
       ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
     };
@@ -351,7 +330,7 @@
         size: PER_PAGE,
         from: (state.page - 1) * PER_PAGE,
         sort: state.sort,
-        extension: state.ext.length ? state.ext.flatMap(k => EXT_FAMILIES[k]) : null,
+        extension: state.ext.length ? state.ext : null,
         author: state.author,
         folder: state.folder,
         source: state.source,
@@ -504,6 +483,12 @@
     function renderFacets(facets) {
       if (!facets) return;
 
+      const extensionsBox = document.getElementById('facet-extensions');
+      extensionsBox.innerHTML = (facets.extensions || []).filter(f => f.key).map(f => `
+        <div class="facet-row${state.ext.includes(f.key) ? ' active' : ''}" data-facet-type="ext" data-facet-value="${escapeHtml(f.key)}">
+          <span>${extLabel(f.key)}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+        </div>`).join('') || '<div class="facet-empty">Aucun type</div>';
+
       const sourcesBox = document.getElementById('facet-sources');
       sourcesBox.innerHTML = (facets.sources || []).filter(f => f.key).map(f => `
         <div class="facet-row${state.source.includes(f.key) ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
@@ -527,12 +512,13 @@
       // le HTML dès qu'un nom d'auteur/dossier contenait un guillemet,
       // via JSON.stringify() injecté dans un attribut déjà délimité
       // par des guillemets doubles).
-      document.querySelectorAll('#facet-sources .facet-row, #facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
+      document.querySelectorAll('#facet-extensions .facet-row, #facet-sources .facet-row, #facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
         row.addEventListener('click', () => toggleFacet(row.dataset.facetType, row.dataset.facetValue));
       });
     }
 
     function toggleFacet(type, value) {
+      if (type === 'ext') state.ext = toggleArrayValue(state.ext, value);
       if (type === 'source') state.source = toggleArrayValue(state.source, value);
       if (type === 'author') state.author = toggleArrayValue(state.author, value);
       if (type === 'folder') state.folder = (state.folder === value) ? null : value;
@@ -547,29 +533,12 @@
       doSearch();
     }
 
-    function toggleChip(el, ext) {
-      // "Tous" désélectionne tout ; un chip type ajoute/retire cette
-      // extension de la sélection (cumulatif, comme source/auteur) —
-      // "Tous" redevient actif automatiquement dès que plus aucun type
-      // précis n'est sélectionné (voir renderTypeChips).
-      state.ext = ext === 'all' ? [] : toggleArrayValue(state.ext, ext);
-      state.page = 1;
-      renderTypeChips();
-      doSearch();
-    }
-
-    function renderTypeChips() {
-      document.querySelectorAll('.chip').forEach(c => {
-        const active = c.dataset.ext === 'all' ? state.ext.length === 0 : state.ext.includes(c.dataset.ext);
-        c.classList.toggle('active', active);
-      });
-    }
-
     function renderActiveFilters() {
       const wrap = document.getElementById('active-filters');
       const chips = [];
       // Une puce PAR valeur sélectionnée (sélection cumulative) — la
       // retirer ne déselectionne que cette valeur-là, pas tout le facet.
+      state.ext.forEach(e => chips.push({ label: 'Type : ' + extLabel(e), clear: () => { state.ext = state.ext.filter(v => v !== e); } }));
       state.source.forEach(s => chips.push({ label: 'Source : ' + s, clear: () => { state.source = state.source.filter(v => v !== s); } }));
       state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
       if (state.folder) chips.push({ label: 'Dossier : ' + state.folder, clear: () => { state.folder = null; } });
@@ -595,7 +564,7 @@
     }
 
     function clearAllFilters() {
-      state.author = []; state.folder = null; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.ext = []; state.author = []; state.folder = null; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -603,9 +572,9 @@
 
     function resetSearch() {
       // Remise à zéro complète — contrairement à clearAllFilters() (qui
-      // ne touche qu'auteur/dossier/source/période), ceci efface aussi la
-      // requête elle-même, le type de fichier, le tri, le champ ciblé,
-      // et ramène l'affichage à l'état initial (aucune recherche lancée).
+      // ne touche qu'aux facettes/période), ceci efface aussi la requête
+      // elle-même, le tri, le champ ciblé, et ramène l'affichage à
+      // l'état initial (aucune recherche lancée).
       state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
 
       document.getElementById('q').value = '';
@@ -614,12 +583,11 @@
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
 
-      renderTypeChips();
-
       document.getElementById('result-count').textContent = 'Entrez une recherche';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
       document.getElementById('active-filters').innerHTML = '';
+      document.getElementById('facet-extensions').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-sources').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
@@ -682,7 +650,7 @@
       // 'all' (anciennes recherches enregistrées) — 'all' ou vide = pas
       // de filtre de type, rien à afficher.
       const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
-      if (extList.length) tags.push(extList.map(e => EXT_LABELS[e] || e).join(', '));
+      if (extList.length) tags.push(extList.map(e => extLabel(e)).join(', '));
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       const authorLabel = multiLabel(s.author);
       if (authorLabel) tags.push('Auteur : ' + authorLabel);
@@ -754,8 +722,6 @@
       document.getElementById('sort').value = state.sort;
       document.getElementById('date-from').value = state.dateFrom || '';
       document.getElementById('date-to').value = state.dateTo || '';
-
-      renderTypeChips();
 
       document.getElementById('saved-panel').classList.remove('open');
       doSearch();
