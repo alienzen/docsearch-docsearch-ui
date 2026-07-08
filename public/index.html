@@ -86,8 +86,14 @@
     .archive-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 2px 8px;
                      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: #aaa; margin-top: 4px;
-                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex;
-                   align-items: center; gap: 4px; }
+                   display: flex; align-items: center; gap: 4px; }
+    .result-path .path-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                               flex: 1; min-width: 0; }
+    .copy-icon-btn { flex-shrink: 0; border: none; background: none; color: #aaa; cursor: pointer;
+                     padding: 3px 5px; border-radius: 5px; font-size: 12px; display: inline-flex;
+                     align-items: center; }
+    .copy-icon-btn:hover { background: #f0f0ec; color: #185FA5; }
+    .copy-icon-btn.copied { color: #1f9254; }
 
     .pagination { display: flex; gap: 6px; justify-content: center; margin-top: 20px; }
     .page-btn { min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
@@ -316,7 +322,21 @@
                 ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
                 ${archiveNote}
               </div>
-              ${r.filepath ? `<div class="result-path" title="${r.filepath}"><i class="ti ti-route" aria-hidden="true"></i>${r.filepath}</div>` : ''}
+              ${r.filepath ? `
+                <div class="result-path" title="${escapeHtml(r.filepath)}">
+                  <i class="ti ti-route" aria-hidden="true"></i>
+                  <span class="path-text">${r.filepath}</span>
+                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
+                          onclick="event.stopPropagation(); copyPathClick(event);"
+                          title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">
+                    <i class="ti ti-folder" aria-hidden="true"></i>
+                  </button>
+                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
+                          onclick="event.stopPropagation(); copyPathClick(event);"
+                          title="Copier le chemin complet" aria-label="Copier le chemin complet">
+                    <i class="ti ti-copy" aria-hidden="true"></i>
+                  </button>
+                </div>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
           </div>
@@ -340,6 +360,50 @@
     }
 
     function goPage(n) { state.page = n; doSearch(); }
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      // Repli pour les contextes non sécurisés (http:// hors localhost, ex:
+      // accès direct par IP en dev) — l'API Clipboard moderne y est
+      // indisponible, seul execCommand('copy') fonctionne encore.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    function dirOfPath(filepath) {
+      // Pour un membre d'archive ("archive.zip::inner/fichier.txt"), le
+      // dossier réel sur le disque est celui de l'archive elle-même, pas
+      // un chemin interne à l'archive.
+      const outer = filepath.split('::')[0];
+      const idx = Math.max(outer.lastIndexOf('/'), outer.lastIndexOf('\\'));
+      return idx >= 0 ? outer.slice(0, idx) : outer;
+    }
+
+    async function copyPathClick(e) {
+      const btn      = e.currentTarget;
+      const filepath = btn.dataset.path;
+      const text     = btn.dataset.copy === 'dir' ? dirOfPath(filepath) : filepath;
+      try {
+        await copyText(text);
+        const icon = btn.querySelector('i');
+        const original = icon.className;
+        icon.className = 'ti ti-check';
+        btn.classList.add('copied');
+        setTimeout(() => { icon.className = original; btn.classList.remove('copied'); }, 1200);
+      } catch (err) {
+        alert("Impossible de copier dans le presse-papier : " + err.message);
+      }
+    }
 
     function escapeHtml(str) {
       return String(str)
