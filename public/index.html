@@ -42,6 +42,9 @@
                         overflow: hidden; text-overflow: ellipsis; }
     .saved-item-query { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden;
                          text-overflow: ellipsis; }
+    .saved-item-criteria { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .saved-crit-tag { font-size: 10px; background: #f0f0ec; color: #666; padding: 2px 7px;
+                       border-radius: 99px; white-space: nowrap; }
     .saved-item-delete { flex-shrink: 0; border: none; background: none; color: #aaa; cursor: pointer;
                           width: 22px; height: 22px; border-radius: 5px; display: inline-flex;
                           align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
@@ -251,6 +254,10 @@
       pst:   ['pst'],
       txt:   ['txt'],
     };
+
+    const EXT_LABELS      = { pdf: 'PDF', word: 'Word', excel: 'Excel', ppt: 'PowerPoint', pst: 'Email', txt: 'Texte' };
+    const SEARCH_IN_LABELS = { title: 'Titre', author: 'Auteur', filepath: 'Chemin' };
+    const SORT_LABELS     = { date_modified: 'Date de modification', filename: 'Nom', size: 'Taille' };
 
     const EXT_COLORS = {
       '.pdf':  { bg:'#FCEBEB', color:'#A32D2D' },
@@ -592,20 +599,35 @@
       }
     }
 
+    function criteriaSummary(s) {
+      const tags = [];
+      if (s.ext && s.ext !== 'all') tags.push(EXT_LABELS[s.ext] || s.ext);
+      if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
+      if (s.author) tags.push('Auteur : ' + s.author);
+      if (s.folder) tags.push('Dossier : ' + s.folder);
+      if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
+      if (s.sort && s.sort !== '_score') tags.push('Tri : ' + (SORT_LABELS[s.sort] || s.sort));
+      return tags;
+    }
+
     function renderSavedPanel(list) {
       const panel = document.getElementById('saved-panel');
       if (!list.length) {
         panel.innerHTML = '<div class="saved-empty">Aucune recherche enregistrée.</div>';
         return;
       }
-      panel.innerHTML = list.map(s => `
+      panel.innerHTML = list.map(s => {
+        const crit = criteriaSummary(s);
+        return `
         <div class="saved-item" data-id="${s.id}">
           <div class="saved-item-main">
             <div class="saved-item-name">${escapeHtml(s.name)}</div>
-            <div class="saved-item-query">${escapeHtml(s.query)}</div>
+            <div class="saved-item-query">« ${escapeHtml(s.query)} »</div>
+            ${crit.length ? `<div class="saved-item-criteria">${crit.map(t => `<span class="saved-crit-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
           </div>
           <button class="saved-item-delete" title="Supprimer" aria-label="Supprimer">✕</button>
-        </div>`).join('');
+        </div>`;
+      }).join('');
 
       panel.querySelectorAll('.saved-item').forEach(row => {
         const id = row.dataset.id;
