@@ -143,6 +143,7 @@
           <td>${r.username || '<span class="muted">—</span>'}</td>
           <td class="mono">${r.ip || '<span class="muted">—</span>'}</td>
           <td>${r.query || ''}</td>
+          <td>${r.source || '<span class="muted">toutes</span>'}</td>
           <td>${r.total_results ?? 0}</td>
           <td>${fmtResults(r.result_files)}</td>
         </tr>`).join('');
@@ -161,9 +162,9 @@
           </div>
           <table>
             <thead>
-              <tr><th>Date / heure</th><th>Utilisateur</th><th>IP</th><th>Requête</th><th>Résultats</th><th>Documents retournés</th></tr>
+              <tr><th>Date / heure</th><th>Utilisateur</th><th>IP</th><th>Requête</th><th>Source</th><th>Résultats</th><th>Documents retournés</th></tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
