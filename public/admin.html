@@ -203,7 +203,8 @@
 
     // ── Types de fichiers ───────────────────────────────────────
     async function renderFiletypes() {
-      const cfg = await api('/admin/filetypes');
+      if (!sourcesCache[selectedFiletypeSource]) selectedFiletypeSource = 'documents';
+      const cfg = await api(`/admin/filetypes?source=${encodeURIComponent(selectedFiletypeSource)}`);
       const rows = Object.entries(cfg).map(([ext, rule]) => `
         <tr data-ext="${ext}">
           <td>${ext}</td>
@@ -215,7 +216,11 @@
 
       return `
         <div class="panel">
-          <h2>Types de fichiers</h2>
+          <h2>Types de fichiers <small>par source — chaque source a sa propre configuration</small></h2>
+          <div class="row">
+            <label class="muted" for="filetype-source">Source :</label>
+            <select id="filetype-source">${sourceOptions(selectedFiletypeSource)}</select>
+          </div>
           <table>
             <thead><tr><th>Extension</th><th>Activé</th><th>Taille max (Mo)</th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
@@ -230,13 +235,17 @@
     }
 
     function wireFiletypes() {
+      document.getElementById('filetype-source')?.addEventListener('change', async (e) => {
+        selectedFiletypeSource = e.target.value;
+        await refresh();
+      });
       document.querySelectorAll('.ft-save').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const tr = e.target.closest('tr');
           const ext = tr.dataset.ext;
           const enabled = tr.querySelector('.ft-enabled').checked;
           const max_size_mb = parseFloat(tr.querySelector('.ft-size').value) || null;
-          await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled, max_size_mb }) });
+          await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled, max_size_mb, source: selectedFiletypeSource }) });
           const hint = e.target.nextElementSibling;
           hint.classList.add('show');
           setTimeout(() => hint.classList.remove('show'), 1500);
@@ -246,8 +255,8 @@
         btn.addEventListener('click', async (e) => {
           const tr = e.target.closest('tr');
           const ext = tr.dataset.ext;
-          if (!confirm(`Supprimer l'extension .${ext} ? Elle ne sera plus indexée.`)) return;
-          await api(`/admin/filetypes/${ext}`, { method: 'DELETE' });
+          if (!confirm(`Supprimer l'extension .${ext} (source '${selectedFiletypeSource}') ? Elle ne sera plus indexée pour cette source.`)) return;
+          await api(`/admin/filetypes/${ext}?source=${encodeURIComponent(selectedFiletypeSource)}`, { method: 'DELETE' });
           await refresh();
         });
       });
@@ -255,12 +264,12 @@
         const ext = document.getElementById('new-ext').value.trim().replace(/^\./, '');
         const size = parseFloat(document.getElementById('new-ext-size').value) || null;
         if (!ext) return;
-        await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled: true, max_size_mb: size }) });
+        await api(`/admin/filetypes/${ext}`, { method: 'POST', body: JSON.stringify({ enabled: true, max_size_mb: size, source: selectedFiletypeSource }) });
         await refresh();
       });
       document.getElementById('reset-filetypes')?.addEventListener('click', async () => {
-        if (!confirm("Charger les extensions par défaut ? Toute extension ajoutée et tout réglage personnalisé (activation, taille max) seront écrasés.")) return;
-        await api('/admin/filetypes/reset', { method: 'POST' });
+        if (!confirm(`Charger les extensions par défaut pour la source '${selectedFiletypeSource}' ? Toute extension ajoutée et tout réglage personnalisé (activation, taille max) seront écrasés pour cette source.`)) return;
+        await api(`/admin/filetypes/reset?source=${encodeURIComponent(selectedFiletypeSource)}`, { method: 'POST' });
         await refresh();
       });
     }
@@ -315,6 +324,7 @@
     let sourcesCache = { documents: { es_index: 'documents', folder: '', label: 'Documents' } };
     let selectedFilterSource = 'documents';
     let selectedScanSource = 'documents';
+    let selectedFiletypeSource = 'documents';
 
     function sourceOptions(selected) {
       return Object.entries(sourcesCache).map(([name, s]) =>
@@ -490,10 +500,11 @@
     // ── Orchestration ───────────────────────────────────────────
     async function refresh() {
       // Sources d'abord et à part (await, pas dans le lot ci-dessous) :
-      // renderPathFilters()/renderScan() lisent sourcesCache de façon
-      // SYNCHRONE pour peupler leur <select> — il doit déjà être à jour
-      // avant qu'ils s'exécutent, un Promise.allSettled ne garantit pas
-      // cet ordre entre promesses lancées en parallèle.
+      // renderFiletypes()/renderPathFilters()/renderScan() lisent
+      // sourcesCache de façon SYNCHRONE pour peupler leur <select> — il
+      // doit déjà être à jour avant qu'ils s'exécutent, un
+      // Promise.allSettled ne garantit pas cet ordre entre promesses
+      // lancées en parallèle.
       let sourcesResult;
       try {
         sourcesResult = { status: 'fulfilled', value: await renderSources() };
