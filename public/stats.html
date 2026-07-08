@@ -140,7 +140,7 @@
         <tr>
           <td>${fmtDate(r.timestamp)}</td>
           <td>${r.query || ''}</td>
-          <td>${r.source || '<span class="muted">toutes</span>'}</td>
+          <td>${Array.isArray(r.source) ? r.source.join(', ') : (r.source || '<span class="muted">toutes</span>')}</td>
           <td>${r.total_results ?? 0}</td>
           <td>${fmtResults(r.result_files)}</td>
         </tr>`).join('');

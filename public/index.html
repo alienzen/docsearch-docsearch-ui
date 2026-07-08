@@ -299,9 +299,15 @@
     }
 
     let state = {
-      ext: 'all', author: null, folder: null, source: null, dateFrom: null, dateTo: null,
+      // author/source : sélection cumulative (plusieurs valeurs à la
+      // fois, combinées en OR côté ES) — folder reste mono-sélection.
+      ext: 'all', author: [], folder: null, source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
     };
+
+    function toggleArrayValue(arr, value) {
+      return arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
+    }
 
     // Icônes en SVG inline plutôt qu'une police d'icônes (aucune n'est
     // chargée dans ce projet — les classes "ti ti-*" utilisées ailleurs
@@ -499,13 +505,13 @@
 
       const sourcesBox = document.getElementById('facet-sources');
       sourcesBox.innerHTML = (facets.sources || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.source === f.key ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
+        <div class="facet-row${state.source.includes(f.key) ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucune source</div>';
 
       const authorsBox = document.getElementById('facet-authors');
       authorsBox.innerHTML = (facets.authors || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.author === f.key ? ' active' : ''}" data-facet-type="author" data-facet-value="${escapeHtml(f.key)}">
+        <div class="facet-row${state.author.includes(f.key) ? ' active' : ''}" data-facet-type="author" data-facet-value="${escapeHtml(f.key)}">
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun auteur</div>';
 
@@ -526,8 +532,8 @@
     }
 
     function toggleFacet(type, value) {
-      if (type === 'source') state.source = (state.source === value) ? null : value;
-      if (type === 'author') state.author = (state.author === value) ? null : value;
+      if (type === 'source') state.source = toggleArrayValue(state.source, value);
+      if (type === 'author') state.author = toggleArrayValue(state.author, value);
       if (type === 'folder') state.folder = (state.folder === value) ? null : value;
       state.page = 1;
       doSearch();
@@ -551,8 +557,10 @@
     function renderActiveFilters() {
       const wrap = document.getElementById('active-filters');
       const chips = [];
-      if (state.source) chips.push({ label: 'Source : ' + state.source, clear: () => { state.source = null; } });
-      if (state.author) chips.push({ label: 'Auteur : ' + state.author, clear: () => { state.author = null; } });
+      // Une puce PAR valeur sélectionnée (sélection cumulative) — la
+      // retirer ne déselectionne que cette valeur-là, pas tout le facet.
+      state.source.forEach(s => chips.push({ label: 'Source : ' + s, clear: () => { state.source = state.source.filter(v => v !== s); } }));
+      state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
       if (state.folder) chips.push({ label: 'Dossier : ' + state.folder, clear: () => { state.folder = null; } });
       if (state.dateFrom || state.dateTo) chips.push({
         label: 'Période : ' + (state.dateFrom || '…') + ' → ' + (state.dateTo || '…'),
@@ -576,7 +584,7 @@
     }
 
     function clearAllFilters() {
-      state.author = null; state.folder = null; state.source = null; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.author = []; state.folder = null; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -587,7 +595,7 @@
       // ne touche qu'auteur/dossier/source/période), ceci efface aussi la
       // requête elle-même, le type de fichier, le tri, le champ ciblé,
       // et ramène l'affichage à l'état initial (aucune recherche lancée).
-      state = { ext: 'all', author: null, folder: null, source: null, dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+      state = { ext: 'all', author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
 
       document.getElementById('q').value = '';
       document.getElementById('scope').value = 'all';
@@ -650,13 +658,24 @@
       }
     }
 
+    function multiLabel(v) {
+      // author/source peuvent être une liste (nouveau, sélection
+      // cumulative) ou une simple chaîne (anciennes recherches
+      // enregistrées avant ce changement) — normalise les deux en texte
+      // affichable, ou null si rien n'est sélectionné.
+      if (Array.isArray(v)) return v.length ? v.join(', ') : null;
+      return v || null;
+    }
+
     function criteriaSummary(s) {
       const tags = [];
       if (s.ext && s.ext !== 'all') tags.push(EXT_LABELS[s.ext] || s.ext);
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
-      if (s.author) tags.push('Auteur : ' + s.author);
+      const authorLabel = multiLabel(s.author);
+      if (authorLabel) tags.push('Auteur : ' + authorLabel);
       if (s.folder) tags.push('Dossier : ' + s.folder);
-      if (s.source) tags.push('Source : ' + s.source);
+      const sourceLabel = multiLabel(s.source);
+      if (sourceLabel) tags.push('Source : ' + sourceLabel);
       if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
       if (s.sort && s.sort !== '_score') tags.push('Tri : ' + (SORT_LABELS[s.sort] || s.sort));
       return tags;
@@ -698,10 +717,18 @@
       });
     }
 
+    function toArray(v) {
+      // Normalise author/source vers un tableau, en acceptant aussi bien
+      // le nouveau format (liste) que l'ancien (chaîne unique, recherches
+      // enregistrées avant le passage à la sélection cumulative).
+      if (Array.isArray(v)) return v;
+      return v ? [v] : [];
+    }
+
     function applySavedSearch(s) {
       state = {
-        ext: s.ext || 'all', author: s.author || null, folder: s.folder || null,
-        source: s.source || null,
+        ext: s.ext || 'all', author: toArray(s.author), folder: s.folder || null,
+        source: toArray(s.source),
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
       };
