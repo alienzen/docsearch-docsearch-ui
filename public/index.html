@@ -299,9 +299,10 @@
     }
 
     let state = {
-      // author/source : sélection cumulative (plusieurs valeurs à la
+      // ext/author/source : sélection cumulative (plusieurs valeurs à la
       // fois, combinées en OR côté ES) — folder reste mono-sélection.
-      ext: 'all', author: [], folder: null, source: [], dateFrom: null, dateTo: null,
+      // ext vide = chip "Tous" (aucun filtre de type).
+      ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
     };
 
@@ -350,7 +351,7 @@
         size: PER_PAGE,
         from: (state.page - 1) * PER_PAGE,
         sort: state.sort,
-        extension: state.ext !== 'all' ? EXT_FAMILIES[state.ext] : null,
+        extension: state.ext.length ? state.ext.flatMap(k => EXT_FAMILIES[k]) : null,
         author: state.author,
         folder: state.folder,
         source: state.source,
@@ -547,11 +548,21 @@
     }
 
     function toggleChip(el, ext) {
-      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-      el.classList.add('active');
-      state.ext = ext;
+      // "Tous" désélectionne tout ; un chip type ajoute/retire cette
+      // extension de la sélection (cumulatif, comme source/auteur) —
+      // "Tous" redevient actif automatiquement dès que plus aucun type
+      // précis n'est sélectionné (voir renderTypeChips).
+      state.ext = ext === 'all' ? [] : toggleArrayValue(state.ext, ext);
       state.page = 1;
+      renderTypeChips();
       doSearch();
+    }
+
+    function renderTypeChips() {
+      document.querySelectorAll('.chip').forEach(c => {
+        const active = c.dataset.ext === 'all' ? state.ext.length === 0 : state.ext.includes(c.dataset.ext);
+        c.classList.toggle('active', active);
+      });
     }
 
     function renderActiveFilters() {
@@ -595,7 +606,7 @@
       // ne touche qu'auteur/dossier/source/période), ceci efface aussi la
       // requête elle-même, le type de fichier, le tri, le champ ciblé,
       // et ramène l'affichage à l'état initial (aucune recherche lancée).
-      state = { ext: 'all', author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+      state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
 
       document.getElementById('q').value = '';
       document.getElementById('scope').value = 'all';
@@ -603,9 +614,7 @@
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
 
-      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-      const allChip = document.querySelector('.chip[data-ext="all"]');
-      if (allChip) allChip.classList.add('active');
+      renderTypeChips();
 
       document.getElementById('result-count').textContent = 'Entrez une recherche';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
@@ -669,7 +678,11 @@
 
     function criteriaSummary(s) {
       const tags = [];
-      if (s.ext && s.ext !== 'all') tags.push(EXT_LABELS[s.ext] || s.ext);
+      // s.ext : liste (nouveau, sélection cumulative) ou chaîne unique/
+      // 'all' (anciennes recherches enregistrées) — 'all' ou vide = pas
+      // de filtre de type, rien à afficher.
+      const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
+      if (extList.length) tags.push(extList.map(e => EXT_LABELS[e] || e).join(', '));
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       const authorLabel = multiLabel(s.author);
       if (authorLabel) tags.push('Auteur : ' + authorLabel);
@@ -726,8 +739,11 @@
     }
 
     function applySavedSearch(s) {
+      // s.ext : liste (nouveau) ou chaîne unique/'all' (anciennes
+      // recherches) — 'all' redevient un tableau vide (pas de filtre).
+      const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
       state = {
-        ext: s.ext || 'all', author: toArray(s.author), folder: s.folder || null,
+        ext: extList, author: toArray(s.author), folder: s.folder || null,
         source: toArray(s.source),
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
@@ -739,9 +755,7 @@
       document.getElementById('date-from').value = state.dateFrom || '';
       document.getElementById('date-to').value = state.dateTo || '';
 
-      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-      const chip = document.querySelector(`.chip[data-ext="${state.ext}"]`) || document.querySelector('.chip[data-ext="all"]');
-      if (chip) chip.classList.add('active');
+      renderTypeChips();
 
       document.getElementById('saved-panel').classList.remove('open');
       doSearch();
