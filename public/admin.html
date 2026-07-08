@@ -107,6 +107,13 @@
       const tika = s.tika || {};
       const workers = s.workers || {};
       const watcher = s.watcher || {};
+      const sources = s.sources || {};
+      const sourceRows = Object.entries(sources).map(([name, info]) => `
+        <tr>
+          <td>${name}</td>
+          <td>${info.es_index}</td>
+          <td style="text-align:right;">${(info.indexed ?? 0).toLocaleString('fr-FR')}</td>
+        </tr>`).join('');
 
       return `
         <div class="panel" id="status-panel">
@@ -143,6 +150,11 @@
               <div class="muted">document(s) en attente de traitement</div>
             </div>
           </div>
+          <div class="muted" style="margin-top:16px;margin-bottom:6px;">Documents indexés par source</div>
+          <table>
+            <thead><tr><th>Source</th><th>Index</th><th style="text-align:right;">Documents</th></tr></thead>
+            <tbody>${sourceRows || '<tr><td colspan="3" class="muted">Aucune source.</td></tr>'}</tbody>
+          </table>
         </div>`;
     }
 
@@ -295,22 +307,95 @@
       });
     }
 
+    // ── Sources d'indexation ─────────────────────────────────────
+    // État partagé entre les panneaux qui doivent cibler UNE source
+    // (filtres de chemin, scan) — persiste le choix de l'utilisateur
+    // d'un rafraîchissement à l'autre plutôt que de revenir à
+    // "documents" à chaque fois.
+    let sourcesCache = { documents: { es_index: 'documents', folder: '', label: 'Documents' } };
+    let selectedFilterSource = 'documents';
+    let selectedScanSource = 'documents';
+
+    function sourceOptions(selected) {
+      return Object.entries(sourcesCache).map(([name, s]) =>
+        `<option value="${name}" ${name === selected ? 'selected' : ''}>${s.label || name} (${s.es_index})</option>`
+      ).join('');
+    }
+
+    async function renderSources() {
+      sourcesCache = await api('/admin/sources');
+      const rows = Object.entries(sourcesCache).map(([name, s]) => `
+        <tr data-name="${name}">
+          <td>${name}</td>
+          <td>${s.es_index}</td>
+          <td class="muted">${s.folder}</td>
+          <td>${name === 'documents' ? '' : '<button class="danger src-delete">Retirer</button>'}</td>
+        </tr>`).join('');
+
+      return `
+        <div class="panel">
+          <h2>Sources <small>un répertoire indexé = un index Elasticsearch dédié</small></h2>
+          <table>
+            <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="row" style="margin-top:14px;">
+            <input type="text" id="new-src-name" placeholder="nom (ex: finance)" />
+            <input type="text" id="new-src-index" placeholder="index ES (ex: finance_docs)" />
+            <input type="text" id="new-src-subfolder" placeholder="sous-dossier (défaut : = nom)" />
+            <input type="text" id="new-src-label" placeholder="libellé (optionnel)" />
+            <button id="add-source">Ajouter</button>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Créez d'abord le sous-dossier sur l'hôte (SOURCES_ROOT/&lt;nom&gt;), puis enregistrez-le
+            ici — le watcher commence à l'observer sous ~5s, sans redémarrage. Lancez ensuite
+            l'indexation initiale avec le panneau "Indexation" ci-dessous.
+          </p>
+        </div>`;
+    }
+
+    function wireSources() {
+      document.querySelectorAll('.src-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (!confirm(`Retirer la source '${name}' ? Son index Elasticsearch et ses documents ne seront PAS supprimés.`)) return;
+          await api(`/admin/sources/${name}`, { method: 'DELETE' });
+          await refresh();
+        });
+      });
+      document.getElementById('add-source')?.addEventListener('click', async () => {
+        const name = document.getElementById('new-src-name').value.trim();
+        const es_index = document.getElementById('new-src-index').value.trim();
+        const subfolder = document.getElementById('new-src-subfolder').value.trim() || null;
+        const label = document.getElementById('new-src-label').value.trim() || null;
+        if (!name || !es_index) { alert('Nom et index ES sont requis.'); return; }
+        await api('/admin/sources', { method: 'POST', body: JSON.stringify({ name, es_index, subfolder, label }) });
+        await refresh();
+      });
+    }
+
     // ── Filtres de chemin ───────────────────────────────────────
     async function renderPathFilters() {
-      const cfg = await api('/admin/path-filters');
+      if (!sourcesCache[selectedFilterSource]) selectedFilterSource = 'documents';
+      const cfg = await api(`/admin/path-filters?source=${encodeURIComponent(selectedFilterSource)}`);
       const tag = (p, kind) => `<span class="tag">${p}<button data-pattern="${p}" data-kind="${kind}" class="rm-filter">✕</button></span>`;
       return `
         <div class="panel">
-          <h2>Filtres de sous-dossiers <small>motifs glob, relatifs à DOCS_FOLDER</small></h2>
+          <h2>Filtres de sous-dossiers <small>motifs glob, relatifs au dossier de la source</small></h2>
 
-          <div class="muted">Liste noire (exclus)</div>
+          <div class="row">
+            <label class="muted" for="filter-source">Source :</label>
+            <select id="filter-source">${sourceOptions(selectedFilterSource)}</select>
+          </div>
+
+          <div class="muted" style="margin-top:10px;">Liste noire (exclus)</div>
           <div class="tag-list" id="excluded-tags">${(cfg.excluded || []).map(p => tag(p, 'excluded')).join('') || '<span class="muted">aucune</span>'}</div>
 
           <div class="muted" style="margin-top:14px;">Liste blanche (si non vide, seuls ces chemins sont indexés)</div>
           <div class="tag-list" id="included-tags">${(cfg.included || []).map(p => tag(p, 'included')).join('') || '<span class="muted">aucune — tout est indexé sauf la liste noire</span>'}</div>
 
           <div class="row" style="margin-top:16px;">
-            <input type="text" id="new-pattern" placeholder="ex: finance/confidentiel ou */tmp" />
+            <input type="text" id="new-pattern" placeholder="ex: confidentiel ou */tmp" />
             <button id="add-exclude" class="secondary">Exclure</button>
             <button id="add-include" class="secondary">Inclure (liste blanche)</button>
           </div>
@@ -327,22 +412,26 @@
     }
 
     function wirePathFilters() {
+      document.getElementById('filter-source')?.addEventListener('change', async (e) => {
+        selectedFilterSource = e.target.value;
+        await refresh();
+      });
       document.querySelectorAll('.rm-filter').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-          await api('/admin/path-filters/remove', { method: 'POST', body: JSON.stringify({ pattern: e.target.dataset.pattern }) });
+          await api('/admin/path-filters/remove', { method: 'POST', body: JSON.stringify({ pattern: e.target.dataset.pattern, source: selectedFilterSource }) });
           await refresh();
         });
       });
       document.getElementById('add-exclude')?.addEventListener('click', async () => {
         const pattern = document.getElementById('new-pattern').value.trim();
         if (!pattern) return;
-        await api('/admin/path-filters/exclude', { method: 'POST', body: JSON.stringify({ pattern }) });
+        await api('/admin/path-filters/exclude', { method: 'POST', body: JSON.stringify({ pattern, source: selectedFilterSource }) });
         await refresh();
       });
       document.getElementById('add-include')?.addEventListener('click', async () => {
         const pattern = document.getElementById('new-pattern').value.trim();
         if (!pattern) return;
-        await api('/admin/path-filters/include', { method: 'POST', body: JSON.stringify({ pattern }) });
+        await api('/admin/path-filters/include', { method: 'POST', body: JSON.stringify({ pattern, source: selectedFilterSource }) });
         await refresh();
       });
 
@@ -351,13 +440,13 @@
         const pattern = document.getElementById('purge-pattern').value.trim();
         if (!pattern) return;
         const resultEl = document.getElementById('purge-result');
-        const res = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern, dry_run: true }) });
+        const res = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern, source: selectedFilterSource, dry_run: true }) });
         lastPreviewPattern = pattern;
-        resultEl.innerHTML = `${res.matched} document(s) correspondent à '${pattern}'. ` +
+        resultEl.innerHTML = `${res.matched} document(s) correspondent à '${pattern}' (source '${selectedFilterSource}'). ` +
           (res.matched > 0 ? `<button id="purge-confirm" class="danger" style="margin-left:8px;">Confirmer la suppression</button>` : '');
         document.getElementById('purge-confirm')?.addEventListener('click', async () => {
           if (!confirm(`Supprimer définitivement ${res.matched} document(s) de l'index (les fichiers sur le disque ne sont pas touchés) ?`)) return;
-          const real = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern: lastPreviewPattern, dry_run: false }) });
+          const real = await api('/admin/purge-path', { method: 'POST', body: JSON.stringify({ pattern: lastPreviewPattern, source: selectedFilterSource, dry_run: false }) });
           resultEl.textContent = `${real.matched} document(s) supprimé(s) de l'index.`;
         });
       });
@@ -365,12 +454,15 @@
 
     // ── Déclenchement d'un scan ─────────────────────────────────
     function renderScan() {
+      if (!sourcesCache[selectedScanSource]) selectedScanSource = 'documents';
       return `
         <div class="panel">
           <h2>Indexation</h2>
-          <p class="muted">Publie les fichiers sur Kafka pour indexation par les workers actifs — ne bloque pas, suivre la progression dans "État des composants" ci-dessus.</p>
+          <p class="muted">Publie les fichiers d'UNE source sur Kafka pour indexation par les workers actifs (pool partagé entre toutes les sources) — ne bloque pas, suivre la progression dans "État des composants" ci-dessus.</p>
           <div class="row" style="margin-top:12px;">
-            <input type="text" id="scan-subfolder" placeholder="sous-dossier (vide = tout DOCS_FOLDER)" />
+            <label class="muted" for="scan-source">Source :</label>
+            <select id="scan-source">${sourceOptions(selectedScanSource)}</select>
+            <input type="text" id="scan-subfolder" placeholder="sous-dossier (vide = dossier complet)" />
             <button id="scan-launch">Lancer un scan</button>
           </div>
           <div id="scan-result" class="muted"></div>
@@ -378,14 +470,17 @@
     }
 
     function wireScan() {
+      document.getElementById('scan-source')?.addEventListener('change', (e) => {
+        selectedScanSource = e.target.value;
+      });
       document.getElementById('scan-launch')?.addEventListener('click', async () => {
         const subfolder = document.getElementById('scan-subfolder').value.trim() || null;
         const btn = document.getElementById('scan-launch');
         btn.disabled = true;
         try {
-          const res = await api('/admin/scan', { method: 'POST', body: JSON.stringify({ subfolder }) });
+          const res = await api('/admin/scan', { method: 'POST', body: JSON.stringify({ source: selectedScanSource, subfolder }) });
           document.getElementById('scan-result').textContent =
-            `Scan démarré (${res.subfolder}). Suivre la progression dans "État des composants".`;
+            `Scan démarré (source '${res.source}', ${res.subfolder}). Suivre la progression dans "État des composants".`;
         } finally {
           btn.disabled = false;
         }
@@ -394,11 +489,23 @@
 
     // ── Orchestration ───────────────────────────────────────────
     async function refresh() {
-      const labels = ['État des composants', "Métriques d'indexation", 'Types de fichiers',
+      // Sources d'abord et à part (await, pas dans le lot ci-dessous) :
+      // renderPathFilters()/renderScan() lisent sourcesCache de façon
+      // SYNCHRONE pour peupler leur <select> — il doit déjà être à jour
+      // avant qu'ils s'exécutent, un Promise.allSettled ne garantit pas
+      // cet ordre entre promesses lancées en parallèle.
+      let sourcesResult;
+      try {
+        sourcesResult = { status: 'fulfilled', value: await renderSources() };
+      } catch (e) {
+        sourcesResult = { status: 'rejected', reason: e };
+      }
+
+      const labels = ['Sources', 'État des composants', "Métriques d'indexation", 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers'];
-      const results = await Promise.allSettled([
+      const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
-      ]);
+      ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
       // même contrôle d'accès a échoué pour toutes (appliqué
@@ -420,6 +527,7 @@
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
       ).join('') + renderScan();
 
+      wireSources();
       wireFiletypes();
       wireConfig();
       wirePathFilters();

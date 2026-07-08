@@ -203,6 +203,10 @@
           </div>
         </div>
         <div class="facet-section">
+          <div class="facet-title">Source</div>
+          <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+        </div>
+        <div class="facet-section">
           <div class="facet-title">Auteur</div>
           <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
         </div>
@@ -269,7 +273,7 @@
     };
 
     let state = {
-      ext: 'all', author: null, folder: null, dateFrom: null, dateTo: null,
+      ext: 'all', author: null, folder: null, source: null, dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
     };
 
@@ -317,6 +321,7 @@
         extension: state.ext !== 'all' ? EXT_FAMILIES[state.ext] : null,
         author: state.author,
         folder: state.folder,
+        source: state.source,
         date_from: state.dateFrom,
         date_to: state.dateTo,
         search_in: document.getElementById('scope').value,
@@ -456,6 +461,12 @@
     function renderFacets(facets) {
       if (!facets) return;
 
+      const sourcesBox = document.getElementById('facet-sources');
+      sourcesBox.innerHTML = (facets.sources || []).filter(f => f.key).map(f => `
+        <div class="facet-row${state.source === f.key ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
+          <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+        </div>`).join('') || '<div class="facet-empty">Aucune source</div>';
+
       const authorsBox = document.getElementById('facet-authors');
       authorsBox.innerHTML = (facets.authors || []).filter(f => f.key).map(f => `
         <div class="facet-row${state.author === f.key ? ' active' : ''}" data-facet-type="author" data-facet-value="${escapeHtml(f.key)}">
@@ -473,12 +484,13 @@
       // le HTML dès qu'un nom d'auteur/dossier contenait un guillemet,
       // via JSON.stringify() injecté dans un attribut déjà délimité
       // par des guillemets doubles).
-      document.querySelectorAll('#facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
+      document.querySelectorAll('#facet-sources .facet-row, #facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
         row.addEventListener('click', () => toggleFacet(row.dataset.facetType, row.dataset.facetValue));
       });
     }
 
     function toggleFacet(type, value) {
+      if (type === 'source') state.source = (state.source === value) ? null : value;
       if (type === 'author') state.author = (state.author === value) ? null : value;
       if (type === 'folder') state.folder = (state.folder === value) ? null : value;
       state.page = 1;
@@ -503,6 +515,7 @@
     function renderActiveFilters() {
       const wrap = document.getElementById('active-filters');
       const chips = [];
+      if (state.source) chips.push({ label: 'Source : ' + state.source, clear: () => { state.source = null; } });
       if (state.author) chips.push({ label: 'Auteur : ' + state.author, clear: () => { state.author = null; } });
       if (state.folder) chips.push({ label: 'Dossier : ' + state.folder, clear: () => { state.folder = null; } });
       if (state.dateFrom || state.dateTo) chips.push({
@@ -527,7 +540,7 @@
     }
 
     function clearAllFilters() {
-      state.author = null; state.folder = null; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.author = null; state.folder = null; state.source = null; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -535,10 +548,10 @@
 
     function resetSearch() {
       // Remise à zéro complète — contrairement à clearAllFilters() (qui
-      // ne touche qu'auteur/dossier/période), ceci efface aussi la
+      // ne touche qu'auteur/dossier/source/période), ceci efface aussi la
       // requête elle-même, le type de fichier, le tri, le champ ciblé,
       // et ramène l'affichage à l'état initial (aucune recherche lancée).
-      state = { ext: 'all', author: null, folder: null, dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+      state = { ext: 'all', author: null, folder: null, source: null, dateFrom: null, dateTo: null, sort: '_score', page: 1 };
 
       document.getElementById('q').value = '';
       document.getElementById('scope').value = 'all';
@@ -554,6 +567,7 @@
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
       document.getElementById('active-filters').innerHTML = '';
+      document.getElementById('facet-sources').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('clear-all').style.display = 'none';
@@ -573,6 +587,7 @@
         ext:       state.ext,
         author:    state.author,
         folder:    state.folder,
+        source:    state.source,
         date_from: state.dateFrom,
         date_to:   state.dateTo,
         sort:      state.sort,
@@ -605,6 +620,7 @@
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       if (s.author) tags.push('Auteur : ' + s.author);
       if (s.folder) tags.push('Dossier : ' + s.folder);
+      if (s.source) tags.push('Source : ' + s.source);
       if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
       if (s.sort && s.sort !== '_score') tags.push('Tri : ' + (SORT_LABELS[s.sort] || s.sort));
       return tags;
@@ -649,6 +665,7 @@
     function applySavedSearch(s) {
       state = {
         ext: s.ext || 'all', author: s.author || null, folder: s.folder || null,
+        source: s.source || null,
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
       };
