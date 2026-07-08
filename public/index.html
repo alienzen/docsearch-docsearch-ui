@@ -26,6 +26,27 @@
     .header-links { display: flex; gap: 16px; align-items: center; margin-left: auto; }
     .header-links a { font-size: 14px; text-decoration: none; }
 
+    .saved-wrap { position: relative; }
+    .saved-toggle { font-size: 14px; color: #185FA5; text-decoration: none; background: none;
+                    border: none; cursor: pointer; font-family: inherit; }
+    .saved-panel { display: none; position: absolute; top: 28px; right: 0; width: 320px;
+                   max-height: 380px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
+                   border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
+    .saved-panel.open { display: block; }
+    .saved-empty { font-size: 12px; color: #888; padding: 12px 10px; text-align: center; }
+    .saved-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+                  cursor: pointer; }
+    .saved-item:hover { background: #f5f5f3; }
+    .saved-item-main { flex: 1; min-width: 0; }
+    .saved-item-name { font-size: 13px; font-weight: 600; color: #1a1a18; white-space: nowrap;
+                        overflow: hidden; text-overflow: ellipsis; }
+    .saved-item-query { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden;
+                         text-overflow: ellipsis; }
+    .saved-item-delete { flex-shrink: 0; border: none; background: none; color: #aaa; cursor: pointer;
+                          width: 22px; height: 22px; border-radius: 5px; display: inline-flex;
+                          align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+    .saved-item-delete:hover { background: #fff0f0; color: #c92a2a; }
+
     .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
     .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
     .filter-label { font-size: 12px; color: #888; }
@@ -145,6 +166,10 @@
       <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
     </div>
     <div class="header-links">
+      <div class="saved-wrap">
+        <button class="saved-toggle" onclick="toggleSavedPanel()">★ Mes recherches</button>
+        <div class="saved-panel" id="saved-panel"></div>
+      </div>
       <a href="/chat" style="color:#185FA5;">Assistant IA →</a>
       <a href="/admin.html" style="color:#888;">Administration</a>
     </div>
@@ -190,6 +215,8 @@
       <main>
         <div class="stats-bar">
           <span id="result-count">Entrez une recherche</span>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
           <div class="sort-select">
             Trier par :
             <select id="sort" onchange="doSearch()">
@@ -198,6 +225,7 @@
               <option value="filename">Nom</option>
               <option value="size">Taille</option>
             </select>
+          </div>
           </div>
         </div>
         <div id="results"><p class="empty">Lancez une recherche pour voir les résultats.</p></div>
@@ -523,6 +551,106 @@
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('clear-all').style.display = 'none';
     }
+
+    // ── Recherches sauvegardées ─────────────────────────────────
+    async function saveCurrentSearch() {
+      const q = document.getElementById('q').value.trim();
+      if (!q) { alert("Lancez une recherche avant de l'enregistrer."); return; }
+      const name = prompt('Nom de cette recherche :', q);
+      if (!name || !name.trim()) return;
+
+      const body = {
+        name,
+        query:     q,
+        search_in: document.getElementById('scope').value,
+        ext:       state.ext,
+        author:    state.author,
+        folder:    state.folder,
+        date_from: state.dateFrom,
+        date_to:   state.dateTo,
+        sort:      state.sort,
+      };
+      try {
+        await api('/saved-searches', { method: 'POST', body: JSON.stringify(body) });
+      } catch (e) {
+        alert("Impossible d'enregistrer la recherche : " + e.message);
+      }
+    }
+
+    async function toggleSavedPanel() {
+      const panel = document.getElementById('saved-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+
+      panel.classList.add('open');
+      panel.innerHTML = '<div class="saved-empty">Chargement…</div>';
+      try {
+        const list = await api('/saved-searches');
+        renderSavedPanel(list);
+      } catch (e) {
+        panel.innerHTML = `<div class="saved-empty">${e.message}</div>`;
+      }
+    }
+
+    function renderSavedPanel(list) {
+      const panel = document.getElementById('saved-panel');
+      if (!list.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune recherche enregistrée.</div>';
+        return;
+      }
+      panel.innerHTML = list.map(s => `
+        <div class="saved-item" data-id="${s.id}">
+          <div class="saved-item-main">
+            <div class="saved-item-name">${escapeHtml(s.name)}</div>
+            <div class="saved-item-query">${escapeHtml(s.query)}</div>
+          </div>
+          <button class="saved-item-delete" title="Supprimer" aria-label="Supprimer">✕</button>
+        </div>`).join('');
+
+      panel.querySelectorAll('.saved-item').forEach(row => {
+        const id = row.dataset.id;
+        const entry = list.find(s => s.id === id);
+        row.querySelector('.saved-item-main').addEventListener('click', () => applySavedSearch(entry));
+        row.querySelector('.saved-item-delete').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Supprimer la recherche « ${entry.name} » ?`)) return;
+          try {
+            const updated = await api(`/saved-searches/${id}`, { method: 'DELETE' });
+            renderSavedPanel(updated);
+          } catch (err) {
+            alert('Impossible de supprimer : ' + err.message);
+          }
+        });
+      });
+    }
+
+    function applySavedSearch(s) {
+      state = {
+        ext: s.ext || 'all', author: s.author || null, folder: s.folder || null,
+        dateFrom: s.date_from || null, dateTo: s.date_to || null,
+        sort: s.sort || '_score', page: 1,
+      };
+
+      document.getElementById('q').value = s.query;
+      document.getElementById('scope').value = s.search_in || 'all';
+      document.getElementById('sort').value = state.sort;
+      document.getElementById('date-from').value = state.dateFrom || '';
+      document.getElementById('date-to').value = state.dateTo || '';
+
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      const chip = document.querySelector(`.chip[data-ext="${state.ext}"]`) || document.querySelector('.chip[data-ext="all"]');
+      if (chip) chip.classList.add('active');
+
+      document.getElementById('saved-panel').classList.remove('open');
+      doSearch();
+    }
+
+    document.addEventListener('click', (e) => {
+      const wrap = document.querySelector('.saved-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('saved-panel').classList.remove('open');
+      }
+    });
 
     async function openDetail(id) {
       const overlay = document.getElementById('modal-overlay');
