@@ -525,6 +525,87 @@
       });
     }
 
+    // ── Sources web (Elastic Open Web Crawler) ──────────────────
+    // Un site crawlé par Elastic Open Web Crawler écrit dans un index ES
+    // intermédiaire (crawl_index, son propre schéma) — web_indexer.py
+    // (docsearch-ingestion) le relit à intervalle régulier pour le
+    // transformer vers le schéma DocSearch dans es_index. Comme pour les
+    // sources SQL, il n'y a pas de bouton "lancer maintenant" ni de
+    // configuration du crawl lui-même ici : ce panneau ne gère que le
+    // registre crawl_index -> es_index (le crawl est configuré à part,
+    // voir docsearch-infra/crawlers/*.yml, et tourne selon son propre
+    // planning). web-worker (déjà actif) prend en compte la nouvelle
+    // source sous ~5s, sans redémarrage.
+    async function renderWebSources() {
+      const sources = await api('/admin/web-sources');
+      const rows = Object.entries(sources).map(([name, s]) => `
+        <tr data-name="${name}">
+          <td>${name}</td>
+          <td class="muted">${s.crawl_index}</td>
+          <td>${s.es_index}</td>
+          <td>${s.acl_public ? 'public' : 'privé'}</td>
+          <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td><button class="danger web-src-delete">Retirer</button></td>
+        </tr>`).join('');
+
+      const body = `
+          <table>
+            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune source web.</td></tr>'}</tbody>
+          </table>
+          <div style="margin-top:14px;">
+            <div class="row">
+              <input type="text" id="new-web-name" placeholder="nom (ex: cc_decisions)" />
+              <input type="text" id="new-web-crawlindex" placeholder="index de crawl (output_index du crawler)" />
+              <input type="text" id="new-web-esindex" placeholder="index ES final (ex: cc_decisions)" />
+            </div>
+            <div class="row">
+              <label class="muted" for="new-web-public">Contenu public (sans authentification)</label>
+              <input type="checkbox" id="new-web-public" checked style="flex:0;" />
+              <input type="number" id="new-web-interval" placeholder="intervalle (s)" value="3600" min="30" style="max-width:130px;" />
+            </div>
+            <button id="add-web-source">Ajouter</button>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            L'index de crawl doit correspondre au <code>output_index</code> déclaré dans la config
+            Elastic Open Web Crawler du site (<code>docsearch-infra/crawlers/*.yml</code>) — jamais le
+            même que l'index ES final, qui reçoit le contenu transformé au schéma DocSearch.
+          </p>`;
+      return panelWrap('websources-panel', 'Sources web', 'sites crawlés par Elastic Open Web Crawler', body);
+    }
+
+    function wireWebSources() {
+      document.querySelectorAll('.web-src-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (!confirm(`Retirer la source web '${name}' ? Ses index Elasticsearch et ses documents ne seront PAS supprimés.`)) return;
+          await api(`/admin/web-sources/${name}`, { method: 'DELETE' });
+          await refresh();
+        });
+      });
+      document.getElementById('add-web-source')?.addEventListener('click', async () => {
+        const name           = document.getElementById('new-web-name').value.trim();
+        const crawl_index    = document.getElementById('new-web-crawlindex').value.trim();
+        const es_index       = document.getElementById('new-web-esindex').value.trim();
+        const acl_public     = document.getElementById('new-web-public').checked;
+        const poll_interval_seconds = parseInt(document.getElementById('new-web-interval').value, 10) || 3600;
+
+        if (!name || !crawl_index || !es_index) {
+          alert('Nom, index de crawl et index ES final sont requis.');
+          return;
+        }
+        try {
+          await api('/admin/web-sources', {
+            method: 'POST',
+            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds }),
+          });
+          await refresh();
+        } catch (e) {
+          alert(`Erreur : ${e.message}`);
+        }
+      });
+    }
+
     // ── Filtres de chemin ───────────────────────────────────────
     async function renderPathFilters() {
       if (!sourcesCache[selectedFilterSource]) selectedFilterSource = 'documents';
@@ -649,10 +730,10 @@
       }
 
       const labels = ['Sources', 'État des composants', "Métriques d'indexation", 'Types de fichiers',
-                      'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL'];
+                      'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        renderSqlSources(),
+        renderSqlSources(), renderWebSources(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -676,7 +757,7 @@
       // premier pour peupler sourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 0, 2, 3, 4, 5, 6];
+      const displayOrder = [1, 0, 2, 3, 4, 5, 6, 7];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -689,6 +770,7 @@
       wireConfig();
       wirePathFilters();
       wireSqlSources();
+      wireWebSources();
       wireScan();
     }
 
