@@ -81,12 +81,31 @@
     // État tenu à part du HTML régénéré à chaque refresh() (toutes les
     // 5s pour État des composants/Métriques, ou après chaque action) —
     // sans ça, replier une section serait annulé au prochain
-    // rafraîchissement. Rien de replié par défaut.
-    const collapsedPanels = new Set();
+    // rafraîchissement. Persisté en localStorage (par navigateur/poste,
+    // pas de compte utilisateur dans cette appli) pour retrouver les
+    // mêmes panneaux repliés d'une session à l'autre. Rien de replié
+    // par défaut si localStorage est vide/indisponible (navigation
+    // privée, quota dépassé...).
+    const COLLAPSED_STORAGE_KEY = 'docsearch-admin-collapsed-panels';
+
+    function loadCollapsedPanels() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedPanels = loadCollapsedPanels();
 
     function toggleAccordion(id) {
       if (collapsedPanels.has(id)) collapsedPanels.delete(id); else collapsedPanels.add(id);
       document.getElementById(id)?.classList.toggle('collapsed', collapsedPanels.has(id));
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
     }
 
     function panelWrap(id, title, subtitle, bodyHtml) {
