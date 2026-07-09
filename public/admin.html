@@ -650,11 +650,20 @@
       // Sinon, chaque panneau affiche son propre message d'erreur à sa
       // place — un index ES absent (503) n'empêche pas les panneaux de
       // configuration (Redis, sans rapport) de s'afficher normalement.
-      $app.innerHTML = results.map((r, i) =>
-        r.status === 'fulfilled'
+      //
+      // Ordre d'AFFICHAGE seulement (État des composants en premier,
+      // visibilité immédiate de la santé du cluster) — distinct de
+      // l'ordre d'EXÉCUTION ci-dessus, qui doit rester Sources en
+      // premier pour peupler sourcesCache avant les panneaux qui le
+      // lisent de façon synchrone. `results`/`labels` restent indexés
+      // dans l'ordre d'exécution, seul displayOrder change.
+      const displayOrder = [1, 0, 2, 3, 4, 5, 6];
+      $app.innerHTML = displayOrder.map(i => {
+        const r = results[i];
+        return r.status === 'fulfilled'
           ? r.value
-          : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
-      ).join('') + renderScan();
+          : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`;
+      }).join('') + renderScan();
 
       wireSources();
       wireFiletypes();
