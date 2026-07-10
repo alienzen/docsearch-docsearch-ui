@@ -15,8 +15,6 @@
     .search-wrap input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
                          border-radius: 8px; font-size: 15px; outline: none; }
     .search-wrap input:focus { border-color: #185FA5; }
-    .scope-select { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
-                    font-size: 13px; background: #fff; color: #555; cursor: pointer; }
     .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: #0C447C; }
@@ -187,12 +185,6 @@
     <div class="search-wrap">
       <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
              onkeydown="if(event.key==='Enter')doSearch()" />
-      <select id="scope" class="scope-select" title="Restreindre la recherche à un champ précis">
-        <option value="all">Tout</option>
-        <option value="title">Titre</option>
-        <option value="author">Auteur</option>
-        <option value="filepath">Chemin</option>
-      </select>
       <div class="sources-select-wrap">
         <button type="button" class="sources-select-toggle" id="sources-select-toggle"
                 title="Restreindre la recherche à une ou plusieurs sources" onclick="toggleSourcesPanel()">Toutes les sources ▾</button>
@@ -457,7 +449,6 @@
         source: state.source,
         date_from: state.dateFrom,
         date_to: state.dateTo,
-        search_in: document.getElementById('scope').value,
       };
 
       const box = document.getElementById('results');
@@ -823,12 +814,11 @@
     function resetSearch() {
       // Remise à zéro complète — contrairement à clearAllFilters() (qui
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
-      // elle-même, le tri, le champ ciblé, et ramène l'affichage à
-      // l'état initial (aucune recherche lancée).
+      // elle-même et le tri, et ramène l'affichage à l'état initial
+      // (aucune recherche lancée).
       state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [] };
 
       document.getElementById('q').value = '';
-      document.getElementById('scope').value = 'all';
       document.getElementById('sort').value = '_score';
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
@@ -856,7 +846,6 @@
       const body = {
         name,
         query:     q,
-        search_in: document.getElementById('scope').value,
         ext:       state.ext,
         author:    state.author,
         folder:    state.folder,
@@ -970,7 +959,6 @@
       };
 
       document.getElementById('q').value = s.query;
-      document.getElementById('scope').value = s.search_in || 'all';
       document.getElementById('sort').value = state.sort;
       document.getElementById('date-from').value = state.dateFrom || '';
       document.getElementById('date-to').value = state.dateTo || '';
