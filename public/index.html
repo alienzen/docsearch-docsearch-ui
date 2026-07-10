@@ -147,6 +147,24 @@
                          background: #185FA5; color: #fff; border-radius: 8px; text-decoration: none;
                          font-size: 13px; margin-top: 4px; }
     .modal-preview-btn:hover { background: #0C447C; }
+
+    /* ── Pouce haut/bas (feedback par recherche) ─────────────── */
+    .feedback-bar { display: flex; align-items: center; gap: 10px; justify-content: center;
+                    margin-top: 18px; padding: 14px; background: #fff; border: 1px solid #e5e5e0;
+                    border-radius: 10px; font-size: 13px; color: #666; }
+    .feedback-btn { border: 1px solid #d5d5ce; background: #fff; border-radius: 8px; cursor: pointer;
+                    font-size: 16px; padding: 5px 12px; line-height: 1; }
+    .feedback-btn:hover:not(:disabled) { background: #f5f5f3; }
+    .feedback-btn:disabled { cursor: default; opacity: 0.5; }
+
+    /* ── NPS (popup occasionnelle) ────────────────────────────── */
+    .nps-scale { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; justify-content: center; }
+    .nps-score-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #d5d5ce;
+                     background: #fff; cursor: pointer; font-size: 13px; }
+    .nps-score-btn:hover { background: #f0f0ec; }
+    .nps-score-btn.chosen { background: #185FA5; color: #fff; border-color: #185FA5; }
+    .nps-labels { display: flex; justify-content: space-between; font-size: 11px; color: #888; }
+    .nps-thanks { text-align: center; color: #1f9254; padding: 20px 0; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -227,12 +245,17 @@
         </div>
         <div id="results"><p class="empty">Lancez une recherche pour voir les résultats.</p></div>
         <div id="pagination" class="pagination"></div>
+        <div id="feedback-bar"></div>
       </main>
     </div>
   </div>
 
   <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal-card" id="modal-card"></div>
+  </div>
+
+  <div class="modal-overlay" id="nps-overlay" onclick="if(event.target===this)closeNps()">
+    <div class="modal-card" id="nps-card" style="max-width:420px;"></div>
   </div>
 
   <script>
@@ -283,7 +306,24 @@
       // identiques aux clés retournées par facets.extensions.
       ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
+      // searchId/resultIds : rattachent le pouce et le tracking de clic
+      // à LA recherche qui a produit les résultats actuellement affichés
+      // (voir renderFeedbackBar() et openDetail()).
+      searchId: null, resultIds: [],
     };
+
+    // Lu une fois au chargement — dit si le pouce/le NPS doivent être
+    // affichés (suspendables depuis l'admin, voir /admin/engagement-config).
+    // Le tracking de clic n'a pas d'équivalent ici : toujours actif.
+    let engagementConfig = { feedback_enabled: false, nps_enabled: false };
+    async function loadEngagementConfig() {
+      try {
+        engagementConfig = await api('/engagement-config');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : pouce/NPS restent
+        // simplement masqués, la recherche elle-même n'est pas affectée.
+      }
+    }
 
     function toggleArrayValue(arr, value) {
       return arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
@@ -342,12 +382,103 @@
       const box = document.getElementById('results');
       try {
         const data = await api('/search', { method: 'POST', body: JSON.stringify(body) });
+        state.searchId   = data.search_id || null;
+        state.resultIds  = data.results.map(r => r.id);
         renderResults(data, q);
         renderFacets(data.facets);
         renderActiveFilters();
+        renderFeedbackBar();
+        maybeShowNps();
       } catch (e) {
         box.innerHTML = `<p class="empty">Impossible de contacter l'API : ${e.message}</p>`;
       }
+    }
+
+    // ── Pouce haut/bas ───────────────────────────────────────────
+    function renderFeedbackBar() {
+      const wrap = document.getElementById('feedback-bar');
+      if (!engagementConfig.feedback_enabled || !state.searchId) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = `
+        <div class="feedback-bar">
+          <span>Cette recherche vous a-t-elle été utile ?</span>
+          <button class="feedback-btn" data-rating="up" aria-label="Oui">👍</button>
+          <button class="feedback-btn" data-rating="down" aria-label="Non">👎</button>
+        </div>`;
+      wrap.querySelectorAll('.feedback-btn').forEach(btn => {
+        btn.addEventListener('click', () => submitFeedback(btn.dataset.rating));
+      });
+    }
+
+    async function submitFeedback(rating) {
+      const wrap = document.getElementById('feedback-bar');
+      const searchId = state.searchId;   // fige la valeur : une recherche suivante ne doit pas changer la cible
+      wrap.querySelectorAll('.feedback-btn').forEach(b => b.disabled = true);
+      try {
+        await api('/feedback', { method: 'POST', body: JSON.stringify({ search_id: searchId, rating }) });
+        wrap.innerHTML = '<div class="feedback-bar"><span>Merci pour votre retour !</span></div>';
+      } catch (e) {
+        wrap.querySelectorAll('.feedback-btn').forEach(b => b.disabled = false);
+        alert("Impossible d'enregistrer votre avis : " + e.message);
+      }
+    }
+
+    // ── Tracking de clic (toujours actif, pas de flag) ──────────
+    function trackClick(docId) {
+      if (!state.searchId) return;
+      const position = state.resultIds.indexOf(docId);
+      // Fire-and-forget : ne doit jamais retarder ni bloquer l'ouverture
+      // du détail du document pour l'utilisateur.
+      api('/click', {
+        method: 'POST',
+        body: JSON.stringify({ search_id: state.searchId, doc_id: docId, position }),
+      }).catch(() => {});
+    }
+
+    // ── NPS (popup occasionnelle) ────────────────────────────────
+    const NPS_EVERY_N_SEARCHES = 20;
+    const NPS_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;   // 30 jours
+
+    function maybeShowNps() {
+      if (!engagementConfig.nps_enabled) return;
+      const count = parseInt(localStorage.getItem('docsearch-search-count') || '0', 10) + 1;
+      localStorage.setItem('docsearch-search-count', String(count));
+      if (count % NPS_EVERY_N_SEARCHES !== 0) return;
+
+      const lastShown = parseInt(localStorage.getItem('docsearch-nps-last-shown') || '0', 10);
+      if (Date.now() - lastShown < NPS_COOLDOWN_MS) return;
+
+      showNpsModal();
+    }
+
+    function showNpsModal() {
+      localStorage.setItem('docsearch-nps-last-shown', String(Date.now()));
+      const card = document.getElementById('nps-card');
+      const scores = Array.from({ length: 11 }, (_, i) => i);
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeNps()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:6px;">Une question rapide</p>
+        <p style="font-size:13px;color:#666;">Sur une échelle de 0 à 10, recommanderiez-vous DocSearch à un collègue ?</p>
+        <div class="nps-scale">${scores.map(s => `<button class="nps-score-btn" data-score="${s}">${s}</button>`).join('')}</div>
+        <div class="nps-labels"><span>Pas du tout probable</span><span>Très probable</span></div>`;
+      document.getElementById('nps-overlay').classList.add('open');
+      card.querySelectorAll('.nps-score-btn').forEach(btn => {
+        btn.addEventListener('click', () => submitNps(parseInt(btn.dataset.score, 10)));
+      });
+    }
+
+    async function submitNps(score) {
+      const card = document.getElementById('nps-card');
+      try {
+        await api('/nps', { method: 'POST', body: JSON.stringify({ score }) });
+      } catch (e) {
+        // Échec silencieux : ne pas transformer un simple remerciement en erreur visible.
+      }
+      card.innerHTML = '<div class="nps-thanks">Merci pour votre retour !</div>';
+      setTimeout(closeNps, 1500);
+    }
+
+    function closeNps() {
+      document.getElementById('nps-overlay').classList.remove('open');
     }
 
     function renderResults(data, q) {
@@ -575,7 +706,7 @@
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
       // elle-même, le tri, le champ ciblé, et ramène l'affichage à
       // l'état initial (aucune recherche lancée).
-      state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+      state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [] };
 
       document.getElementById('q').value = '';
       document.getElementById('scope').value = 'all';
@@ -586,6 +717,7 @@
       document.getElementById('result-count').textContent = 'Entrez une recherche';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
+      document.getElementById('feedback-bar').innerHTML = '';
       document.getElementById('active-filters').innerHTML = '';
       document.getElementById('facet-extensions').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-sources').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
@@ -735,6 +867,7 @@
     });
 
     async function openDetail(id) {
+      trackClick(id);
       const overlay = document.getElementById('modal-overlay');
       const card = document.getElementById('modal-card');
       card.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">Chargement…</p>';
@@ -802,7 +935,9 @@
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); } });
+
+    loadEngagementConfig();
   </script>
 </body>
 </html>

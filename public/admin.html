@@ -303,6 +303,52 @@
       });
     }
 
+    // ── Mesure de satisfaction (pouce + NPS) ─────────────────────
+    // Le tracking de clic n'a pas de bascule ici : signal passif,
+    // toujours actif (voir docsearch-api/search_api.py).
+    async function renderEngagement() {
+      const cfg = await api('/engagement-config');
+      const body = `
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eng-feedback" ${cfg.feedback_enabled ? 'checked' : ''} />
+              Pouce haut/bas après chaque recherche
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eng-nps" ${cfg.nps_enabled ? 'checked' : ''} />
+              Popup NPS occasionnelle (toutes les 20 recherches, cooldown 30 jours)
+            </label>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Le tracking de clic sur les résultats reste toujours actif — c'est un signal passif,
+            sans widget ni friction pour l'utilisateur, pas de bascule nécessaire.
+          </p>`;
+      return panelWrap('engagement-panel', 'Mesure de satisfaction', "effectif immédiatement, pas de redémarrage", body);
+    }
+
+    function wireEngagement() {
+      document.getElementById('eng-feedback')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/engagement-config', { method: 'POST', body: JSON.stringify({ feedback_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('eng-nps')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/engagement-config', { method: 'POST', body: JSON.stringify({ nps_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+    }
+
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
     // Complète les panneaux CRUD dédiés (Sources / Sources SQL / Sources
     // web ci-dessous, qui gèrent chacun les champs propres à leur type)
@@ -819,10 +865,10 @@
 
       const labels = ['Sources', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
-                      'Toutes les sources'];
+                      'Toutes les sources', 'Mesure de satisfaction'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        renderSqlSources(), renderWebSources(), renderAllSources(),
+        renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -846,7 +892,7 @@
       // premier pour peupler sourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 7, 0, 2, 3, 4, 5, 6];
+      const displayOrder = [1, 7, 0, 2, 3, 8, 4, 5, 6];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -861,6 +907,7 @@
       wireSqlSources();
       wireWebSources();
       wireAllSources();
+      wireEngagement();
       wireScan();
     }
 

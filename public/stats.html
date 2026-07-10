@@ -106,6 +106,9 @@
           <div class="label">${b.date.slice(5)}</div>
         </div>`).join('');
 
+      const feedbackTotal = s.feedback_up + s.feedback_down;
+      const feedbackPct = feedbackTotal ? Math.round((s.feedback_up / feedbackTotal) * 100) : null;
+
       return `
         <div class="panel">
           <h2>Vue d'ensemble</h2>
@@ -118,11 +121,44 @@
               <div class="name">Utilisateurs distincts</div>
               <div class="value">${s.unique_users}</div>
             </div>
+            <div class="status-card">
+              <div class="name">Avis positifs (👍)</div>
+              <div class="value">${feedbackPct !== null ? feedbackPct + ' %' : '—'}</div>
+              <div class="muted">${feedbackTotal} avis (${s.feedback_up} 👍 / ${s.feedback_down} 👎)</div>
+            </div>
           </div>
           ${s.by_day.length ? `
             <div class="muted" style="margin-bottom:8px;">Recherches par jour (14 derniers jours)</div>
             <div class="day-bars">${bars}</div>
           ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}
+        </div>`;
+    }
+
+    // ── NPS ────────────────────────────────────────────────────
+    async function renderNps() {
+      const n = await api('/admin/nps-summary');
+      return `
+        <div class="panel">
+          <h2>NPS <small>recommanderiez-vous DocSearch à un collègue ?</small></h2>
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="name">Score NPS</div>
+              <div class="value">${n.nps_score !== null ? n.nps_score : '—'}</div>
+              <div class="muted">${n.total_responses} réponse(s)</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Promoteurs (9-10)</div>
+              <div class="value">${n.promoters}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Passifs (7-8)</div>
+              <div class="value">${n.passives}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Détracteurs (0-6)</div>
+              <div class="value">${n.detractors}</div>
+            </div>
+          </div>
         </div>`;
     }
 
@@ -132,6 +168,7 @@
       if (filters.q) params.set('q', filters.q);
 
       const res = await api(`/admin/search-logs?${params}`);
+      const feedbackLabel = { up: '👍', down: '👎' };
       const rows = res.results.map(r => `
         <tr>
           <td>${fmtDate(r.timestamp)}</td>
@@ -139,6 +176,8 @@
           <td>${Array.isArray(r.source) ? r.source.join(', ') : (r.source || '<span class="muted">toutes</span>')}</td>
           <td>${r.total_results ?? 0}</td>
           <td>${fmtResults(r.result_files)}</td>
+          <td>${feedbackLabel[r.feedback] || '<span class="muted">—</span>'}</td>
+          <td>${(r.clicks || []).length || '<span class="muted">—</span>'}</td>
         </tr>`).join('');
 
       const from = res.total === 0 ? 0 : currentFrom + 1;
@@ -154,9 +193,9 @@
           </div>
           <table>
             <thead>
-              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Résultats</th><th>Documents retournés</th></tr>
+              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Résultats</th><th>Documents retournés</th><th>Avis</th><th>Clics</th></tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
@@ -197,7 +236,7 @@
     }
 
     async function refresh() {
-      const results = await Promise.allSettled([renderSummary(), renderLogs()]);
+      const results = await Promise.allSettled([renderSummary(), renderNps(), renderLogs()]);
 
       const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
       const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
@@ -206,10 +245,10 @@
         return;
       }
 
-      const labels = ["Vue d'ensemble", 'Historique des recherches'];
+      const labels = ["Vue d'ensemble", 'NPS', 'Historique des recherches'];
       $app.innerHTML = results.map((r, i) =>
         r.status === 'fulfilled'
-          ? (i === 1 ? r.value.replace('<div class="panel">', '<div class="panel" id="logs-panel">') : r.value)
+          ? (i === 2 ? r.value.replace('<div class="panel">', '<div class="panel" id="logs-panel">') : r.value)
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
       ).join('');
 
