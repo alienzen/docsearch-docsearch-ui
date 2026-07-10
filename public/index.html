@@ -187,6 +187,7 @@
         <button class="saved-toggle" onclick="toggleSavedPanel()">★ Mes recherches</button>
         <div class="saved-panel" id="saved-panel"></div>
       </div>
+      <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
       <a href="/chat" style="color:#185FA5;">Assistant IA →</a>
       <a href="/admin.html" style="color:#888;">Administration</a>
     </div>
@@ -258,6 +259,10 @@
     <div class="modal-card" id="nps-card" style="max-width:420px;"></div>
   </div>
 
+  <div class="modal-overlay" id="suggestion-overlay" onclick="if(event.target===this)closeSuggestionModal()">
+    <div class="modal-card" id="suggestion-card" style="max-width:460px;"></div>
+  </div>
+
   <script>
     const PER_PAGE = 10;
     // Un chip "Word"/"Excel"/"PowerPoint" doit couvrir à la fois le
@@ -312,17 +317,19 @@
       searchId: null, resultIds: [],
     };
 
-    // Lu une fois au chargement — dit si le pouce/le NPS doivent être
-    // affichés (suspendables depuis l'admin, voir /admin/engagement-config).
-    // Le tracking de clic n'a pas d'équivalent ici : toujours actif.
-    let engagementConfig = { feedback_enabled: false, nps_enabled: false };
+    // Lu une fois au chargement — dit si le pouce/le NPS/les suggestions
+    // doivent être affichés (suspendables depuis l'admin, voir
+    // /admin/engagement-config). Le tracking de clic n'a pas
+    // d'équivalent ici : toujours actif.
+    let engagementConfig = { feedback_enabled: false, nps_enabled: false, suggestions_enabled: false };
     async function loadEngagementConfig() {
       try {
         engagementConfig = await api('/engagement-config');
       } catch (e) {
-        // Échec silencieux (API indisponible) : pouce/NPS restent
-        // simplement masqués, la recherche elle-même n'est pas affectée.
+        // Échec silencieux (API indisponible) : pouce/NPS/suggestions
+        // restent simplement masqués, la recherche elle-même n'est pas affectée.
       }
+      document.getElementById('suggestion-link').style.display = engagementConfig.suggestions_enabled ? '' : 'none';
     }
 
     function toggleArrayValue(arr, value) {
@@ -479,6 +486,43 @@
 
     function closeNps() {
       document.getElementById('nps-overlay').classList.remove('open');
+    }
+
+    // ── Suggestions libres ───────────────────────────────────────
+    function openSuggestionModal() {
+      const card = document.getElementById('suggestion-card');
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:6px;">💡 Suggérer une idée</p>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout.</p>
+        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;margin-bottom:10px;">
+          <option value="idea">Idée / amélioration</option>
+          <option value="bug">Bug</option>
+          <option value="other">Autre</option>
+        </select>
+        <textarea id="suggestion-text" rows="5" placeholder="Votre suggestion…"
+                  style="width:100%;padding:10px;border:1px solid #d5d5ce;border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
+        <button class="btn-primary" style="margin-top:12px;width:100%;" onclick="submitSuggestion()">Envoyer</button>`;
+      document.getElementById('suggestion-overlay').classList.add('open');
+      document.getElementById('suggestion-text').focus();
+    }
+
+    async function submitSuggestion() {
+      const text = document.getElementById('suggestion-text').value.trim();
+      if (!text) { alert('Le champ ne peut pas être vide.'); return; }
+      const category = document.getElementById('suggestion-category').value;
+      const card = document.getElementById('suggestion-card');
+      try {
+        await api('/suggestions', { method: 'POST', body: JSON.stringify({ text, category }) });
+        card.innerHTML = '<div class="nps-thanks">Merci pour votre suggestion !</div>';
+        setTimeout(closeSuggestionModal, 1500);
+      } catch (e) {
+        alert("Impossible d'envoyer votre suggestion : " + e.message);
+      }
+    }
+
+    function closeSuggestionModal() {
+      document.getElementById('suggestion-overlay').classList.remove('open');
     }
 
     function renderResults(data, q) {
@@ -935,7 +979,7 @@
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); } });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); closeSuggestionModal(); } });
 
     loadEngagementConfig();
   </script>

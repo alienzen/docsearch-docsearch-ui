@@ -162,6 +162,63 @@
         </div>`;
     }
 
+    // ── Suggestions libres ───────────────────────────────────────
+    let suggestionsFrom = 0;
+    const SUGGESTIONS_PAGE_SIZE = 20;
+    const categoryLabel = { bug: 'Bug', idea: 'Idée', other: 'Autre' };
+
+    async function renderSuggestions() {
+      const res = await api(`/admin/suggestions?size=${SUGGESTIONS_PAGE_SIZE}&from=${suggestionsFrom}`);
+      const rows = res.results.map(s => `
+        <tr>
+          <td>${fmtDate(s.timestamp)}</td>
+          <td>${s.username || ''}</td>
+          <td>${categoryLabel[s.category] || '<span class="muted">—</span>'}</td>
+          <td>${escapeHtmlStats(s.text)}</td>
+        </tr>`).join('');
+
+      const from = res.total === 0 ? 0 : suggestionsFrom + 1;
+      const to   = Math.min(suggestionsFrom + SUGGESTIONS_PAGE_SIZE, res.total);
+
+      return `
+        <div class="panel">
+          <h2>Suggestions <small>recueillies via le lien "💡 Suggérer une idée"</small></h2>
+          <table>
+            <thead><tr><th>Date / heure</th><th>Utilisateur</th><th>Catégorie</th><th>Suggestion</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
+          </table>
+          <div class="pager">
+            <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
+            <button id="suggestions-prev" class="secondary" ${suggestionsFrom === 0 ? 'disabled' : ''}>← Précédent</button>
+            <button id="suggestions-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
+          </div>
+        </div>`;
+    }
+
+    function escapeHtmlStats(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function wireSuggestions() {
+      document.getElementById('suggestions-prev')?.addEventListener('click', () => {
+        suggestionsFrom = Math.max(0, suggestionsFrom - SUGGESTIONS_PAGE_SIZE);
+        refreshSuggestions();
+      });
+      document.getElementById('suggestions-next')?.addEventListener('click', () => {
+        suggestionsFrom += SUGGESTIONS_PAGE_SIZE;
+        refreshSuggestions();
+      });
+    }
+
+    async function refreshSuggestions() {
+      const panel = document.getElementById('suggestions-panel');
+      const html = await renderSuggestions();
+      if (panel) {
+        panel.outerHTML = html.replace('<div class="panel">', '<div class="panel" id="suggestions-panel">');
+      }
+      wireSuggestions();
+    }
+
     // ── Table des recherches ──────────────────────────────────────
     async function renderLogs() {
       const params = new URLSearchParams({ size: PAGE_SIZE, from: currentFrom });
@@ -236,7 +293,7 @@
     }
 
     async function refresh() {
-      const results = await Promise.allSettled([renderSummary(), renderNps(), renderLogs()]);
+      const results = await Promise.allSettled([renderSummary(), renderNps(), renderSuggestions(), renderLogs()]);
 
       const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
       const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
@@ -245,13 +302,15 @@
         return;
       }
 
-      const labels = ["Vue d'ensemble", 'NPS', 'Historique des recherches'];
+      const panelIds = { 2: 'suggestions-panel', 3: 'logs-panel' };
+      const labels = ["Vue d'ensemble", 'NPS', 'Suggestions', 'Historique des recherches'];
       $app.innerHTML = results.map((r, i) =>
         r.status === 'fulfilled'
-          ? (i === 2 ? r.value.replace('<div class="panel">', '<div class="panel" id="logs-panel">') : r.value)
+          ? (panelIds[i] ? r.value.replace('<div class="panel">', `<div class="panel" id="${panelIds[i]}">`) : r.value)
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
       ).join('');
 
+      wireSuggestions();
       wireLogs();
     }
 
