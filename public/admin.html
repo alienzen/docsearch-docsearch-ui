@@ -356,6 +356,70 @@
       });
     }
 
+    // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
+    // Complète les panneaux CRUD dédiés (Sources / Sources SQL / Sources
+    // web ci-dessous, qui gèrent chacun les champs propres à leur type)
+    // par une liste transverse : compte de documents + bascule
+    // "recherche activée" par source, quel que soit son type. Désactiver
+    // la recherche n'arrête PAS l'ingestion (watcher/sql-worker/
+    // web-worker continuent normalement) — la source devient seulement
+    // invisible dans /search.
+    const TYPE_LABELS = { file: 'Bureautique', sql: 'SQL', web: 'Web' };
+
+    async function renderAllSources() {
+      const sources = await api('/admin/all-sources');
+      const rows = Object.entries(sources)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, s]) => `
+        <tr data-name="${name}" data-type="${s.type}">
+          <td>${escapeHtml(s.label)}</td>
+          <td>${TYPE_LABELS[s.type] || s.type}</td>
+          <td class="muted">${s.es_index}</td>
+          <td style="text-align:right;">${(s.indexed ?? 0).toLocaleString('fr-FR')}</td>
+          <td>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" class="src-searchable" ${s.searchable ? 'checked' : ''} />
+              <span class="muted">${s.searchable ? 'activée' : 'désactivée'}</span>
+            </label>
+          </td>
+        </tr>`).join('');
+
+      const body = `
+          <table>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th style="text-align:right;">Documents</th><th>Recherche</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+          </table>`;
+      return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function wireAllSources() {
+      document.querySelectorAll('.src-searchable').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const type = tr.dataset.type;
+          const searchable = e.target.checked;
+          const label = e.target.nextElementSibling;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/all-sources/${encodeURIComponent(name)}/searchable?type=${type}`, {
+              method: 'POST', body: JSON.stringify({ searchable }),
+            });
+            label.textContent = searchable ? 'activée' : 'désactivée';
+          } catch (err) {
+            e.target.checked = !searchable;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
+    }
+
     // ── Sources d'indexation ─────────────────────────────────────
     // État partagé entre les panneaux qui doivent cibler UNE source
     // (filtres de chemin, scan) — persiste le choix de l'utilisateur
@@ -730,10 +794,11 @@
       }
 
       const labels = ['Sources', 'État des composants', "Métriques d'indexation", 'Types de fichiers',
-                      'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web'];
+                      'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
+                      'Toutes les sources'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        renderSqlSources(), renderWebSources(),
+        renderSqlSources(), renderWebSources(), renderAllSources(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -757,7 +822,7 @@
       // premier pour peupler sourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 0, 2, 3, 4, 5, 6, 7];
+      const displayOrder = [1, 8, 0, 2, 3, 4, 5, 6, 7];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -771,6 +836,7 @@
       wirePathFilters();
       wireSqlSources();
       wireWebSources();
+      wireAllSources();
       wireScan();
     }
 
