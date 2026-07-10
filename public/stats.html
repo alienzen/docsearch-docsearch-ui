@@ -16,8 +16,14 @@
                  flex-direction: column; gap: 24px; }
 
     .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
-    .panel h2 { font-size: 16px; margin-bottom: 14px; color: #1a1a18; }
     .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                     font-size: 16px; color: #1a1a18; margin: 0; cursor: pointer; user-select: none; }
+    .accordion-caret { font-size: 11px; color: #888; flex-shrink: 0; transition: transform 0.15s; }
+    .panel.collapsed .accordion-caret { transform: rotate(-90deg); }
+    .panel-body { margin-top: 14px; }
+    .panel.collapsed .panel-body { display: none; }
 
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; margin-bottom: 16px; }
@@ -72,6 +78,41 @@
     let currentFrom = 0;
     let filters = { q: '' };
 
+    // ── Accordéon (même mécanisme que admin.html — clé localStorage
+    // distincte pour ne pas mélanger l'état replié des deux pages) ──
+    const COLLAPSED_STORAGE_KEY = 'docsearch-stats-collapsed-panels';
+
+    function loadCollapsedPanels() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedPanels = loadCollapsedPanels();
+
+    function toggleAccordion(id) {
+      if (collapsedPanels.has(id)) collapsedPanels.delete(id); else collapsedPanels.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedPanels.has(id));
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+    }
+
+    function panelWrap(id, title, subtitle, bodyHtml) {
+      return `
+        <div class="panel${collapsedPanels.has(id) ? ' collapsed' : ''}" id="${id}">
+          <h2 class="panel-header" onclick="toggleAccordion('${id}')">
+            <span>${title}${subtitle ? ` <small>${subtitle}</small>` : ''}</span>
+            <span class="accordion-caret">▾</span>
+          </h2>
+          <div class="panel-body">${bodyHtml}</div>
+        </div>`;
+    }
+
     async function api(path) {
       const res = await fetch(path);
       if (!res.ok) {
@@ -109,9 +150,7 @@
       const feedbackTotal = s.feedback_up + s.feedback_down;
       const feedbackPct = feedbackTotal ? Math.round((s.feedback_up / feedbackTotal) * 100) : null;
 
-      return `
-        <div class="panel">
-          <h2>Vue d'ensemble</h2>
+      const body = `
           <div class="status-grid">
             <div class="status-card">
               <div class="name">Recherches effectuées</div>
@@ -130,16 +169,14 @@
           ${s.by_day.length ? `
             <div class="muted" style="margin-bottom:8px;">Recherches par jour (14 derniers jours)</div>
             <div class="day-bars">${bars}</div>
-          ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}
-        </div>`;
+          ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}`;
+      return panelWrap('summary-panel', "Vue d'ensemble", null, body);
     }
 
     // ── NPS ────────────────────────────────────────────────────
     async function renderNps() {
       const n = await api('/admin/nps-summary');
-      return `
-        <div class="panel">
-          <h2>NPS <small>recommanderiez-vous DocSearch à un collègue ?</small></h2>
+      const body = `
           <div class="status-grid">
             <div class="status-card">
               <div class="name">Score NPS</div>
@@ -158,8 +195,8 @@
               <div class="name">Détracteurs (0-6)</div>
               <div class="value">${n.detractors}</div>
             </div>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('nps-panel', 'NPS', 'recommanderiez-vous DocSearch à un collègue ?', body);
     }
 
     // ── Suggestions libres ───────────────────────────────────────
@@ -172,7 +209,6 @@
       const rows = res.results.map(s => `
         <tr>
           <td>${fmtDate(s.timestamp)}</td>
-          <td>${s.username || ''}</td>
           <td>${categoryLabel[s.category] || '<span class="muted">—</span>'}</td>
           <td>${escapeHtmlStats(s.text)}</td>
         </tr>`).join('');
@@ -180,19 +216,17 @@
       const from = res.total === 0 ? 0 : suggestionsFrom + 1;
       const to   = Math.min(suggestionsFrom + SUGGESTIONS_PAGE_SIZE, res.total);
 
-      return `
-        <div class="panel">
-          <h2>Suggestions <small>recueillies via le lien "💡 Suggérer une idée"</small></h2>
+      const body = `
           <table>
-            <thead><tr><th>Date / heure</th><th>Utilisateur</th><th>Catégorie</th><th>Suggestion</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
+            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
             <button id="suggestions-prev" class="secondary" ${suggestionsFrom === 0 ? 'disabled' : ''}>← Précédent</button>
             <button id="suggestions-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('suggestions-panel', 'Suggestions', 'recueillies via le lien "💡 Suggérer une idée" — anonymes', body);
     }
 
     function escapeHtmlStats(str) {
@@ -212,10 +246,7 @@
 
     async function refreshSuggestions() {
       const panel = document.getElementById('suggestions-panel');
-      const html = await renderSuggestions();
-      if (panel) {
-        panel.outerHTML = html.replace('<div class="panel">', '<div class="panel" id="suggestions-panel">');
-      }
+      if (panel) panel.outerHTML = await renderSuggestions();
       wireSuggestions();
     }
 
@@ -240,9 +271,7 @@
       const from = res.total === 0 ? 0 : currentFrom + 1;
       const to   = Math.min(currentFrom + PAGE_SIZE, res.total);
 
-      return `
-        <div class="panel">
-          <h2>Historique des recherches</h2>
+      const body = `
           <div class="row">
             <input type="text" id="filter-q" placeholder="Filtrer par mot-clé de la requête" value="${filters.q}" />
             <button id="apply-filters">Filtrer</button>
@@ -258,8 +287,8 @@
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
             <button id="prev-page" class="secondary" ${currentFrom === 0 ? 'disabled' : ''}>← Précédent</button>
             <button id="next-page" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('logs-panel', 'Historique des recherches', null, body);
     }
 
     function wireLogs() {
@@ -285,10 +314,7 @@
 
     async function refreshLogs() {
       const panel = document.getElementById('logs-panel');
-      const html = await renderLogs();
-      if (panel) {
-        panel.outerHTML = html.replace('<div class="panel">', '<div class="panel" id="logs-panel">');
-      }
+      if (panel) panel.outerHTML = await renderLogs();
       wireLogs();
     }
 
@@ -302,11 +328,10 @@
         return;
       }
 
-      const panelIds = { 2: 'suggestions-panel', 3: 'logs-panel' };
       const labels = ["Vue d'ensemble", 'NPS', 'Suggestions', 'Historique des recherches'];
       $app.innerHTML = results.map((r, i) =>
         r.status === 'fulfilled'
-          ? (panelIds[i] ? r.value.replace('<div class="panel">', `<div class="panel" id="${panelIds[i]}">`) : r.value)
+          ? r.value
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
       ).join('');
 
