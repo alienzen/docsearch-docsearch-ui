@@ -155,13 +155,6 @@
       const tika = s.tika || {};
       const workers = s.workers || {};
       const watcher = s.watcher || {};
-      const sources = s.sources || {};
-      const sourceRows = Object.entries(sources).map(([name, info]) => `
-        <tr>
-          <td>${name}</td>
-          <td>${info.es_index}</td>
-          <td style="text-align:right;">${(info.indexed ?? 0).toLocaleString('fr-FR')}</td>
-        </tr>`).join('');
 
       const body = `
           <div class="status-grid">
@@ -195,12 +188,7 @@
               <div class="value">${workers.pending_documents ?? '?'}</div>
               <div class="muted">document(s) en attente de traitement</div>
             </div>
-          </div>
-          <div class="muted" style="margin-top:16px;margin-bottom:6px;">Documents indexés par source</div>
-          <table>
-            <thead><tr><th>Source</th><th>Index</th><th style="text-align:right;">Documents</th></tr></thead>
-            <tbody>${sourceRows || '<tr><td colspan="3" class="muted">Aucune source.</td></tr>'}</tbody>
-          </table>`;
+          </div>`;
       return panelWrap('status-panel', 'État des composants', 'rafraîchi toutes les 5s', body);
     }
 
@@ -396,6 +384,28 @@
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // Renommage générique, partagé par les panneaux Sources / Sources SQL /
+    // Sources web — le endpoint (différent par type) répercute aussi le
+    // champ "source" des documents déjà indexés (voir _rename_source_documents
+    // côté docsearch-api), pas seulement le registre.
+    async function renameSourcePrompt(oldName, endpointBase) {
+      const newName = prompt(`Nouveau nom pour la source '${oldName}' (minuscules, chiffres, '-'/'_') :`, oldName);
+      if (!newName || newName.trim() === '' || newName === oldName) return false;
+      try {
+        const res = await api(`${endpointBase}/${encodeURIComponent(oldName)}/rename`, {
+          method: 'POST',
+          body: JSON.stringify({ new_name: newName.trim() }),
+        });
+        if (res.documents_updated) {
+          alert(`Source renommée en '${newName.trim()}' — ${res.documents_updated} document(s) mis à jour.`);
+        }
+        return true;
+      } catch (e) {
+        alert(`Erreur : ${e.message}`);
+        return false;
+      }
+    }
+
     function wireAllSources() {
       document.querySelectorAll('.src-searchable').forEach(cb => {
         cb.addEventListener('change', async (e) => {
@@ -443,12 +453,13 @@
           <td>${name}</td>
           <td>${s.es_index}</td>
           <td class="muted">${s.folder}</td>
+          <td>${name === 'documents' ? '' : '<button class="secondary src-rename">Renommer</button>'}</td>
           <td>${name === 'documents' ? '' : '<button class="danger src-delete">Retirer</button>'}</td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
@@ -467,6 +478,12 @@
     }
 
     function wireSources() {
+      document.querySelectorAll('.src-rename').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (await renameSourcePrompt(name, '/admin/sources')) await refresh();
+        });
+      });
       document.querySelectorAll('.src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
@@ -507,13 +524,14 @@
           <td>${s.id_column}</td>
           <td class="muted">${s.connection_ref}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td><button class="secondary sql-src-rename">Renommer</button></td>
           <td><button class="danger sql-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
           <div style="margin-top:14px;">
             <div class="row">
@@ -548,6 +566,12 @@
     }
 
     function wireSqlSources() {
+      document.querySelectorAll('.sql-src-rename').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (await renameSourcePrompt(name, '/admin/sql-sources')) await refresh();
+        });
+      });
       document.querySelectorAll('.sql-src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
@@ -613,13 +637,14 @@
             ? '<span class="muted">⏸ suspendu</span>'
             : '<span style="color:#1f9254;">▶ actif</span>'}</td>
           <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
+          <td><button class="secondary web-src-rename">Renommer</button></td>
           <td><button class="danger web-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
           <p class="muted" style="margin-top:8px;">
             « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
@@ -658,6 +683,12 @@
             body: JSON.stringify({ paused: !currentlyPaused }),
           });
           await refresh();
+        });
+      });
+      document.querySelectorAll('.web-src-rename').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (await renameSourcePrompt(name, '/admin/web-sources')) await refresh();
         });
       });
       document.querySelectorAll('.web-src-delete').forEach(btn => {
