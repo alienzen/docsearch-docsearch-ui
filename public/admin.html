@@ -609,14 +609,23 @@
           <td>${s.es_index}</td>
           <td>${s.acl_public ? 'public' : 'privé'}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td>${s.paused
+            ? '<span class="muted">⏸ suspendu</span>'
+            : '<span style="color:#1f9254;">▶ actif</span>'}</td>
+          <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
           <td><button class="danger web-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
+          <p class="muted" style="margin-top:8px;">
+            « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
+            de crawl) — le conteneur Elastic Open Web Crawler lui-même, s'il tourne en planification
+            continue, n'est pas piloté depuis cette interface et continue son cycle indépendamment.
+          </p>
           <div style="margin-top:14px;">
             <div class="row">
               <input type="text" id="new-web-name" placeholder="nom (ex: cc_decisions)" />
@@ -639,6 +648,18 @@
     }
 
     function wireWebSources() {
+      document.querySelectorAll('.web-src-toggle-pause').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const currentlyPaused = e.target.textContent.trim() === 'Reprendre';
+          await api(`/admin/web-sources/${encodeURIComponent(name)}/pause`, {
+            method: 'POST',
+            body: JSON.stringify({ paused: !currentlyPaused }),
+          });
+          await refresh();
+        });
+      });
       document.querySelectorAll('.web-src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
