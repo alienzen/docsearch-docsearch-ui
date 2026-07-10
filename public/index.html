@@ -26,6 +26,20 @@
     .header-links { display: flex; gap: 16px; align-items: center; margin-left: auto; }
     .header-links a { font-size: 14px; text-decoration: none; }
 
+    /* ── Présélection de sources (avant recherche) ────────────── */
+    .sources-select-wrap { position: relative; }
+    .sources-select-toggle { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
+                              font-size: 13px; background: #fff; color: #555; cursor: pointer;
+                              white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    .sources-select-panel { display: none; position: absolute; top: 38px; left: 0; min-width: 220px;
+                             max-height: 280px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
+                             border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
+    .sources-select-panel.open { display: block; }
+    .sources-select-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+                            cursor: pointer; font-size: 13px; color: #333; }
+    .sources-select-item:hover { background: #f5f5f3; }
+    .sources-select-item input { flex-shrink: 0; }
+
     .saved-wrap { position: relative; }
     .saved-toggle { font-size: 14px; color: #185FA5; text-decoration: none; background: none;
                     border: none; cursor: pointer; font-family: inherit; }
@@ -179,6 +193,11 @@
         <option value="author">Auteur</option>
         <option value="filepath">Chemin</option>
       </select>
+      <div class="sources-select-wrap">
+        <button type="button" class="sources-select-toggle" id="sources-select-toggle"
+                title="Restreindre la recherche à une ou plusieurs sources" onclick="toggleSourcesPanel()">Toutes les sources ▾</button>
+        <div class="sources-select-panel" id="sources-select-panel"></div>
+      </div>
       <button class="btn-primary" onclick="doSearch()">Rechercher</button>
       <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
     </div>
@@ -334,6 +353,61 @@
 
     function toggleArrayValue(arr, value) {
       return arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
+    }
+
+    // ── Présélection de sources (avant recherche) ────────────────
+    // Complète la facette "Source" de la sidebar (qui n'apparaît qu'APRÈS
+    // une recherche, dérivée des résultats) — les deux partagent le même
+    // state.source, donc une sélection faite ici reste reflétée là-bas
+    // (et réciproquement) sans code de synchronisation supplémentaire.
+    let allSources = [];   // [{name, label, type}], chargé une fois au démarrage
+
+    async function loadSearchableSources() {
+      try {
+        allSources = await api('/searchable-sources');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : la présélection reste
+        // vide, la recherche fédérée sur toutes les sources continue de
+        // fonctionner normalement.
+      }
+      updateSourcesButtonLabel();
+    }
+
+    function updateSourcesButtonLabel() {
+      const btn = document.getElementById('sources-select-toggle');
+      if (!btn) return;
+      let label;
+      if (!state.source.length) label = 'Toutes les sources';
+      else if (state.source.length === 1) label = state.source[0];
+      else label = `${state.source.length} sources`;
+      btn.textContent = label + ' ▾';
+    }
+
+    function renderSourcesPanel() {
+      const panel = document.getElementById('sources-select-panel');
+      if (!allSources.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune source disponible</div>';
+        return;
+      }
+      panel.innerHTML = allSources.map(s => `
+        <label class="sources-select-item">
+          <input type="checkbox" data-source="${escapeHtml(s.name)}" ${state.source.includes(s.name) ? 'checked' : ''} />
+          ${escapeHtml(s.label)}
+        </label>`).join('');
+      panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          state.source = toggleArrayValue(state.source, cb.dataset.source);
+          updateSourcesButtonLabel();
+        });
+      });
+    }
+
+    function toggleSourcesPanel() {
+      const panel = document.getElementById('sources-select-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+      renderSourcesPanel();
+      panel.classList.add('open');
     }
 
     // Icônes en SVG inline plutôt qu'une police d'icônes (aucune n'est
@@ -730,6 +804,7 @@
       ).join('');
       window.__clearFns = chips.map(c => c.clear);
       document.getElementById('clear-all').style.display = chips.length ? 'inline-block' : 'none';
+      updateSourcesButtonLabel();
     }
 
     function clearFilterAt(i) {
@@ -768,6 +843,7 @@
       document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('clear-all').style.display = 'none';
+      updateSourcesButtonLabel();
     }
 
     // ── Recherches sauvegardées ─────────────────────────────────
@@ -908,6 +984,10 @@
       if (wrap && !wrap.contains(e.target)) {
         document.getElementById('saved-panel').classList.remove('open');
       }
+      const sourcesWrap = document.querySelector('.sources-select-wrap');
+      if (sourcesWrap && !sourcesWrap.contains(e.target)) {
+        document.getElementById('sources-select-panel').classList.remove('open');
+      }
     });
 
     async function openDetail(id) {
@@ -982,6 +1062,7 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); closeSuggestionModal(); } });
 
     loadEngagementConfig();
+    loadSearchableSources();
   </script>
 </body>
 </html>
