@@ -136,6 +136,21 @@
       return shown.join(', ') + (rest > 0 ? ` <span class="muted">+${rest}</span>` : '');
     }
 
+    // Résume les filtres actifs (extension/auteur/dossier/période) au
+    // moment de la recherche — extension/author peuvent être une liste
+    // (sélection cumulative, voir index.html) ou une chaîne unique.
+    function formatCriteria(r) {
+      const tags = [];
+      const asList = v => Array.isArray(v) ? v : (v ? [v] : []);
+      const extList = asList(r.extension);
+      if (extList.length) tags.push(extList.map(e => (e || '').replace('.', '').toUpperCase()).join(', '));
+      const authorList = asList(r.author);
+      if (authorList.length) tags.push('Auteur : ' + authorList.join(', '));
+      if (r.folder) tags.push('Dossier : ' + r.folder);
+      if (r.date_from || r.date_to) tags.push('Période : ' + (r.date_from || '…') + ' → ' + (r.date_to || '…'));
+      return tags.length ? tags.map(t => escapeHtmlStats(t)).join(' · ') : '<span class="muted">—</span>';
+    }
+
     // ── Cartes de résumé + répartition par jour ──────────────────
     async function renderSummary() {
       const s = await api('/admin/search-logs/summary');
@@ -262,6 +277,7 @@
           <td>${fmtDate(r.timestamp)}</td>
           <td>${r.query || ''}</td>
           <td>${Array.isArray(r.source) ? r.source.join(', ') : (r.source || '<span class="muted">toutes</span>')}</td>
+          <td>${formatCriteria(r)}</td>
           <td>${r.total_results ?? 0}</td>
           <td>${fmtResults(r.result_files)}</td>
           <td>${feedbackLabel[r.feedback] || '<span class="muted">—</span>'}</td>
@@ -279,9 +295,9 @@
           </div>
           <table>
             <thead>
-              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Résultats</th><th>Documents retournés</th><th>Avis</th><th>Clics</th></tr>
+              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Critères</th><th>Résultats</th><th>Documents retournés</th><th>Avis</th><th>Clics</th></tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
