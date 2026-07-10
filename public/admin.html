@@ -79,7 +79,7 @@
 
     // ── Accordéon ────────────────────────────────────────────────
     // État tenu à part du HTML régénéré à chaque refresh() (toutes les
-    // 5s pour État des composants/Métriques, ou après chaque action) —
+    // 5s pour État des composants, ou après chaque action) —
     // sans ça, replier une section serait annulé au prochain
     // rafraîchissement. Persisté en localStorage (par navigateur/poste,
     // pas de compte utilisateur dans cette appli) pour retrouver les
@@ -190,47 +190,6 @@
             </div>
           </div>`;
       return panelWrap('status-panel', 'État des composants', 'rafraîchi toutes les 5s', body);
-    }
-
-    // ── Métriques d'indexation (documents, taille, répartition) ──
-    async function renderMetrics() {
-      const m = await api('/metrics');
-      const totalExt = (m.by_extension || []).reduce((s, b) => s + b.doc_count, 0) || 1;
-      const rows = (m.by_extension || []).map(b => {
-        const pct = Math.round((b.doc_count / totalExt) * 100);
-        return `
-          <tr>
-            <td>${b.key || '(sans extension)'}</td>
-            <td style="text-align:right;">${b.doc_count.toLocaleString('fr-FR')}</td>
-            <td style="width:40%;">
-              <div style="background:#eee;border-radius:4px;overflow:hidden;height:8px;">
-                <div style="background:#185FA5;height:100%;width:${pct}%;"></div>
-              </div>
-            </td>
-          </tr>`;
-      }).join('');
-
-      const body = `
-          <div class="status-grid" style="margin-bottom:16px;">
-            <div class="status-card">
-              <div class="name">Documents indexés</div>
-              <div class="value">${(m.indexed ?? 0).toLocaleString('fr-FR')}</div>
-            </div>
-            <div class="status-card">
-              <div class="name">Taille de l'index</div>
-              <div class="value">${m.size_gb ?? '?'} Go</div>
-            </div>
-            <div class="status-card">
-              <div class="name">Version Elasticsearch</div>
-              <div class="value">${m.es_version ?? '?'}</div>
-            </div>
-          </div>
-          <div class="muted" style="margin-bottom:6px;">Répartition par extension</div>
-          <table>
-            <thead><tr><th>Extension</th><th style="text-align:right;">Documents</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucun document indexé.</td></tr>'}</tbody>
-          </table>`;
-      return panelWrap('metrics-panel', "Métriques d'indexation", null, body);
     }
 
     // ── Types de fichiers ───────────────────────────────────────
@@ -858,11 +817,11 @@
         sourcesResult = { status: 'rejected', reason: e };
       }
 
-      const labels = ['Sources', 'État des composants', "Métriques d'indexation", 'Types de fichiers',
+      const labels = ['Sources', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
                       'Toutes les sources'];
       const results = [sourcesResult, ...await Promise.allSettled([
-        renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
+        renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
         renderSqlSources(), renderWebSources(), renderAllSources(),
       ])];
 
@@ -887,7 +846,7 @@
       // premier pour peupler sourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 8, 0, 2, 3, 4, 5, 6, 7];
+      const displayOrder = [1, 7, 0, 2, 3, 4, 5, 6];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -906,22 +865,20 @@
     }
 
     async function refreshStatusOnly() {
-      // Rafraîchissement léger périodique (état des composants +
-      // métriques d'indexation seulement) — pas les panneaux de
-      // configuration, qu'on ne veut pas réécraser pendant que
-      // l'utilisateur les édite. Ciblage par id (pas par position :
-      // '.panel' seul serait ambigu maintenant que plusieurs panneaux
-      // read-only coexistent).
-      const statusPanel  = document.getElementById('status-panel');
-      const metricsPanel = document.getElementById('metrics-panel');
-      if (!statusPanel || !metricsPanel) return;
+      // Rafraîchissement léger périodique (état des composants
+      // seulement) — pas les panneaux de configuration, qu'on ne veut
+      // pas réécraser pendant que l'utilisateur les édite. Ciblage par
+      // id (pas par position : '.panel' seul serait ambigu maintenant
+      // que plusieurs panneaux read-only coexistent).
+      const statusPanel = document.getElementById('status-panel');
+      if (!statusPanel) return;
 
-      const [statusResult, metricsResult] = await Promise.allSettled([renderStatus(), renderMetrics()]);
-      // allSettled : un échec sur l'un des deux (ex: index ES absent
-      // pour les métriques) ne doit pas empêcher l'autre panneau de
-      // se rafraîchir normalement.
-      if (statusResult.status === 'fulfilled')  statusPanel.outerHTML  = statusResult.value;
-      if (metricsResult.status === 'fulfilled') metricsPanel.outerHTML = metricsResult.value;
+      try {
+        statusPanel.outerHTML = await renderStatus();
+      } catch (e) {
+        // Échec transitoire (ES/Redis momentanément indisponible) : le
+        // panneau garde son dernier état affiché plutôt que de casser.
+      }
     }
 
     refresh();
