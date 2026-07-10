@@ -292,6 +292,7 @@
             <input type="text" id="filter-q" placeholder="Filtrer par mot-clé de la requête" value="${filters.q}" />
             <button id="apply-filters">Filtrer</button>
             <button id="reset-filters" class="secondary">Réinitialiser</button>
+            <button id="export-logs" class="secondary">⬇ Exporter en XLS</button>
           </div>
           <table>
             <thead>
@@ -325,6 +326,15 @@
       document.getElementById('next-page')?.addEventListener('click', () => {
         currentFrom += PAGE_SIZE;
         refreshLogs();
+      });
+      document.getElementById('export-logs')?.addEventListener('click', () => {
+        // Reprend le filtre de mot-clé actuellement appliqué (pas la
+        // pagination — l'export couvre TOUTES les lignes correspondantes).
+        // Content-Disposition: attachment déclenche un téléchargement
+        // sans quitter la page, ouvrir un nouvel onglet suffit.
+        const params = new URLSearchParams();
+        if (filters.q) params.set('q', filters.q);
+        window.open(`/admin/search-logs/export?${params}`, '_blank');
       });
     }
 
