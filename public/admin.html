@@ -622,6 +622,7 @@
       const rows = Object.entries(sources).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label}</td>
           <td>${s.db_type}</td>
           <td>${s.es_index}</td>
           <td>${s.id_column}</td>
@@ -633,8 +634,8 @@
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
           <div style="margin-top:14px;">
             <div class="row">
@@ -649,6 +650,9 @@
               <input type="text" id="new-sql-index" placeholder="index ES (ex: clients_pg_sql)" />
               <input type="text" id="new-sql-idcol" placeholder="colonne ID (ex: id)" />
               <input type="number" id="new-sql-interval" placeholder="intervalle (s)" value="300" min="10" style="max-width:130px;" />
+            </div>
+            <div class="row">
+              <input type="text" id="new-sql-label" placeholder="libellé (optionnel)" />
             </div>
             <div class="row">
               <textarea id="new-sql-query" rows="2" style="flex:1;font:inherit;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
@@ -692,6 +696,7 @@
         const poll_interval_seconds = parseInt(document.getElementById('new-sql-interval').value, 10) || 300;
         const query           = document.getElementById('new-sql-query').value.trim();
         const fieldsRaw        = document.getElementById('new-sql-fields').value.trim();
+        const label            = document.getElementById('new-sql-label').value.trim() || null;
 
         if (!name || !connection_ref || !es_index || !id_column || !query || !fieldsRaw) {
           alert('Tous les champs sont requis (nom, connection_ref, index ES, colonne ID, requête, mapping fields).');
@@ -707,7 +712,7 @@
         try {
           await api('/admin/sql-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds }),
+            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label }),
           });
           await refresh();
         } catch (e) {
@@ -732,6 +737,7 @@
       const rows = Object.entries(sources).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label}</td>
           <td class="muted">${s.crawl_index}</td>
           <td>${s.es_index}</td>
           <td>${s.acl_public ? 'public' : 'privé'}</td>
@@ -746,8 +752,8 @@
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="10" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
           <p class="muted" style="margin-top:8px;">
             « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
@@ -764,6 +770,7 @@
               <label class="muted" for="new-web-public">Contenu public (sans authentification)</label>
               <input type="checkbox" id="new-web-public" checked style="flex:0;" />
               <input type="number" id="new-web-interval" placeholder="intervalle (s)" value="3600" min="30" style="max-width:130px;" />
+              <input type="text" id="new-web-label" placeholder="libellé (optionnel)" />
             </div>
             <button id="add-web-source">Ajouter</button>
           </div>
@@ -808,6 +815,7 @@
         const es_index       = document.getElementById('new-web-esindex').value.trim();
         const acl_public     = document.getElementById('new-web-public').checked;
         const poll_interval_seconds = parseInt(document.getElementById('new-web-interval').value, 10) || 3600;
+        const label          = document.getElementById('new-web-label').value.trim() || null;
 
         if (!name || !crawl_index || !es_index) {
           alert('Nom, index de crawl et index ES final sont requis.');
@@ -816,7 +824,7 @@
         try {
           await api('/admin/web-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds }),
+            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds, label }),
           });
           await refresh();
         } catch (e) {
