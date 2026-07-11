@@ -658,9 +658,63 @@
       };
     }
 
+    // ── Syntaxe avancée de recherche ────────────────────────────
+    // "auteur:", "type:", "source:", "dossier:" (+ alias anglais) dans la
+    // barre de recherche — convertis en filtres cumulatifs (state.author/
+    // ext/source/folder), EXACTEMENT comme un clic sur la facette
+    // correspondante : même mécanisme de sélection cumulative, mêmes
+    // puces retirables, même correspondance EXACTE (pas de recherche
+    // floue — la valeur doit correspondre à ce qu'affiche la facette,
+    // ex: copier-coller le nom d'auteur depuis la liste "Auteur").
+    // Valeur sur un seul mot (auteur:dupont) ou entre guillemets pour les
+    // espaces (auteur:"Jean Dupont"). Un opérateur non reconnu (ex:
+    // "foo:bar") est laissé tel quel dans le texte libre plutôt que
+    // silencieusement supprimé.
+    const ADVANCED_QUERY_OPERATORS = {
+      auteur: 'author', author: 'author',
+      type: 'ext', ext: 'ext', extension: 'ext',
+      source: 'source',
+      dossier: 'folder', folder: 'folder',
+    };
+    const ADVANCED_QUERY_RE = /\b([a-zA-Z]+):(?:"([^"]*)"|(\S+))/g;
+
+    function parseAdvancedQuery(text) {
+      const extracted = { author: [], ext: [], source: [], folder: [] };
+      const remaining = text.replace(ADVANCED_QUERY_RE, (match, key, quoted, bare) => {
+        const dim = ADVANCED_QUERY_OPERATORS[key.toLowerCase()];
+        if (!dim) return match;
+        let value = (quoted !== undefined ? quoted : bare).trim();
+        if (!value) return match;
+        if (dim === 'ext') value = (value.startsWith('.') ? value : '.' + value).toLowerCase();
+        extracted[dim].push(value);
+        return '';
+      }).replace(/\s+/g, ' ').trim();
+      return { remaining, extracted };
+    }
+
+    // Vrai s'il y a quelque chose à chercher : texte libre, ou au moins
+    // un filtre actif (facette cliquée ou extraite de la syntaxe avancée,
+    // ou période) — une recherche à critères tous vides ne part jamais.
+    function hasActiveCriteria(q) {
+      return !!q || state.ext.length || state.author.length || state.folder.length ||
+             state.source.length || state.dateFrom || state.dateTo;
+    }
+
     async function doSearch() {
-      const q = document.getElementById('q').value.trim();
-      if (!q) return;
+      const rawQ = document.getElementById('q').value.trim();
+      const { remaining, extracted } = parseAdvancedQuery(rawQ);
+      extracted.author.forEach(v => { if (!state.author.includes(v)) state.author.push(v); });
+      extracted.ext.forEach(v    => { if (!state.ext.includes(v))    state.ext.push(v); });
+      extracted.source.forEach(v => { if (!state.source.includes(v)) state.source.push(v); });
+      extracted.folder.forEach(v => { if (!state.folder.includes(v)) state.folder.push(v); });
+      // La barre ne garde que le texte libre restant — les opérateurs
+      // reconnus deviennent des puces de filtre (voir renderActiveFilters),
+      // seule source de vérité ensuite (les retirer via leur puce ✕ ne
+      // doit pas les faire réapparaître au prochain Entrée).
+      if (remaining !== rawQ) document.getElementById('q').value = remaining;
+
+      const q = remaining;
+      if (!hasActiveCriteria(q)) return;
       state.sort = document.getElementById('sort').value;
 
       const body = {
@@ -691,7 +745,7 @@
     // qu'un GET.
     async function exportResults(format) {
       const q = document.getElementById('q').value.trim();
-      if (!q) return;
+      if (!hasActiveCriteria(q)) return;
       const body = { ...buildSearchCriteria(q), format };
       try {
         const res = await fetch('/search/export', {
@@ -1173,8 +1227,8 @@
     // ── Recherches sauvegardées ─────────────────────────────────
     async function saveCurrentSearch() {
       const q = document.getElementById('q').value.trim();
-      if (!q) { alert("Lancez une recherche avant de l'enregistrer."); return; }
-      const name = prompt('Nom de cette recherche :', q);
+      if (!hasActiveCriteria(q)) { alert("Lancez une recherche avant de l'enregistrer."); return; }
+      const name = prompt('Nom de cette recherche :', q || 'Recherche sans titre');
       if (!name || !name.trim()) return;
 
       const body = {

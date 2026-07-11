@@ -54,6 +54,26 @@
         </tbody>
       </table>
 
+      <h2>Syntaxe avancée (barre de recherche)</h2>
+      <p>En plus des facettes de la colonne de gauche, ces opérateurs peuvent être tapés directement
+         dans la barre de recherche, combinés entre eux et avec du texte libre — ex:
+         <code>type:pdf auteur:"Jean Dupont" rapport annuel</code>. Une fois la recherche lancée, ils
+         disparaissent de la barre et deviennent des puces de filtre (comme un clic sur la facette
+         correspondante) — la valeur doit donc correspondre exactement à ce qu'affiche la facette
+         (pas de recherche approximative sur ces champs-là).</p>
+      <table>
+        <thead><tr><th>Opérateur</th><th>Exemple</th><th>Équivaut à</th></tr></thead>
+        <tbody>
+          <tr><td><code>auteur:</code></td><td><code>auteur:"Jean Dupont"</code></td><td>Facette Auteur</td></tr>
+          <tr><td><code>type:</code></td><td><code>type:pdf</code></td><td>Facette Type de fichier</td></tr>
+          <tr><td><code>source:</code></td><td><code>source:documents</code></td><td>Facette Source</td></tr>
+          <tr><td><code>dossier:</code></td><td><code>dossier:Finance</code></td><td>Facette Dossier</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">La valeur peut tenir en un seul mot (<code>type:pdf</code>) ou être entre
+         guillemets si elle contient des espaces (<code>auteur:"Jean Dupont"</code>). Un opérateur
+         seul, sans texte libre, cherche tous les documents correspondant à ce filtre.</p>
+
       <h2>Besoin d'aide ?</h2>
       <p>Contactez l'équipe technique pour toute question sur l'utilisation de DocSearch.</p>
     </div>
