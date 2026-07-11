@@ -80,6 +80,7 @@
                           padding: 4px 6px 4px 12px; border-radius: 99px; background: #E6F1FB; color: #185FA5; }
     .active-filter-chip button { background: none; border: none; color: #185FA5; cursor: pointer;
                                  display: flex; padding: 2px; }
+    .active-filter-chip button svg { width: 12px; height: 12px; }
 
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
     @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
@@ -277,8 +278,10 @@
           <span id="result-count" style="display:none;"></span>
           <div id="results-actions" style="display:none; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
-            <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
-            <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
+            <span id="export-actions" style="display:none; align-items:center; gap:16px;">
+              <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
+              <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
+            </span>
           <div class="sort-select">
             Trier par :
             <select id="sort" onchange="doSearch()">
@@ -392,7 +395,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -412,6 +415,10 @@
       }
       document.getElementById('chat-link').style.display = uiConfigCache.chat_enabled ? '' : 'none';
       document.getElementById('page-footer').style.display = uiConfigCache.footer_enabled ? '' : 'none';
+      // export-actions est imbriqué dans results-actions (masqué tant
+      // qu'aucune recherche n'est lancée) — on ne fixe ici que la
+      // visibilité liée au flag, indépendamment de l'état de la recherche.
+      document.getElementById('export-actions').style.display = uiConfigCache.export_enabled ? 'inline-flex' : 'none';
       updateAdminLinksVisibility();
     }
 
@@ -525,6 +532,7 @@
     const ICON_FOLDER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h5l2 3h9a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-13a1 1 0 0 1 1 -1"/></svg>';
     const ICON_COPY   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8v-3a1 1 0 0 0 -1 -1h-9a1 1 0 0 0 -1 1v9a1 1 0 0 0 1 1h3"/></svg>';
     const ICON_CHECK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg>';
+    const ICON_X      = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
 
     function fmtSize(bytes) {
       if (!bytes) return '—';
@@ -954,7 +962,7 @@
         }
       });
       wrap.innerHTML = chips.map((c, i) =>
-        `<span class="active-filter-chip">${c.label}<button onclick="clearFilterAt(${i})" aria-label="Retirer ce filtre"><i class="ti ti-x" aria-hidden="true" style="font-size:12px;"></i></button></span>`
+        `<span class="active-filter-chip">${c.label}<button onclick="clearFilterAt(${i})" aria-label="Retirer ce filtre">${ICON_X}</button></span>`
       ).join('');
       window.__clearFns = chips.map(c => c.clear);
       document.getElementById('clear-all').style.display = chips.length ? 'inline-block' : 'none';
