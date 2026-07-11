@@ -277,6 +277,8 @@
           <span id="result-count" style="display:none;"></span>
           <div id="results-actions" style="display:none; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
+            <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
+            <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
           <div class="sort-select">
             Trier par :
             <select id="sort" onchange="doSearch()">
@@ -546,15 +548,11 @@
       return res.json();
     }
 
-    async function doSearch() {
-      const q = document.getElementById('q').value.trim();
-      if (!q) return;
-      state.sort = document.getElementById('sort').value;
-
-      const body = {
+    // Critères communs à /search et /search/export (pagination exclue —
+    // chacun des deux appelants fixe from/size selon son propre besoin).
+    function buildSearchCriteria(q) {
+      return {
         query: q,
-        size: PER_PAGE,
-        from: (state.page - 1) * PER_PAGE,
         sort: state.sort,
         extension: state.ext.length ? state.ext : null,
         author: state.author,
@@ -562,6 +560,18 @@
         source: state.source,
         date_from: state.dateFrom,
         date_to: state.dateTo,
+      };
+    }
+
+    async function doSearch() {
+      const q = document.getElementById('q').value.trim();
+      if (!q) return;
+      state.sort = document.getElementById('sort').value;
+
+      const body = {
+        ...buildSearchCriteria(q),
+        size: PER_PAGE,
+        from: (state.page - 1) * PER_PAGE,
       };
 
       const box = document.getElementById('results');
@@ -576,6 +586,43 @@
         maybeShowNps();
       } catch (e) {
         box.innerHTML = `<p class="empty">Impossible de contacter l'API : ${e.message}</p>`;
+      }
+    }
+
+    // ── Export des résultats (XLSX / DOCX) ──────────────────────
+    // POST (pas GET comme /admin/search-logs/export) : les critères de
+    // recherche peuvent dépasser la taille raisonnable d'une query
+    // string. fetch + blob plutôt que window.open(), qui ne sait faire
+    // qu'un GET.
+    async function exportResults(format) {
+      const q = document.getElementById('q').value.trim();
+      if (!q) return;
+      const body = { ...buildSearchCriteria(q), format };
+      try {
+        const res = await fetch('/search/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.detail || `Erreur ${res.status}`);
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : `resultats.${format}`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert("Impossible d'exporter les résultats : " + e.message);
       }
     }
 
