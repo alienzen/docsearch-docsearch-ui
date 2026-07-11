@@ -113,8 +113,8 @@
         </div>`;
     }
 
-    async function api(path) {
-      const res = await fetch(path);
+    async function api(path, options = {}) {
+      const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const err = new Error(body.detail || `Erreur ${res.status}`);
@@ -219,15 +219,22 @@
     let suggestionsFrom = 0;
     const SUGGESTIONS_PAGE_SIZE = 20;
     const categoryLabel = { bug: 'Bug', idea: 'Idée', other: 'Autre' };
+    const SUGGESTION_STATUS_LABELS = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité' };
 
     async function renderSuggestions() {
       const res = await api(`/admin/suggestions?size=${SUGGESTIONS_PAGE_SIZE}&from=${suggestionsFrom}`);
       const rows = res.results.map(s => `
-        <tr>
+        <tr data-id="${s.id}">
           <td>${fmtDate(s.timestamp)}</td>
           <td>${categoryLabel[s.category] || '<span class="muted">—</span>'}</td>
           <td>${escapeHtmlStats(s.text)}</td>
           <td>${s.username ? escapeHtmlStats(s.username) : '<span class="muted">Anonyme</span>'}</td>
+          <td>
+            <select class="suggestion-status">
+              ${Object.entries(SUGGESTION_STATUS_LABELS).map(([v, l]) =>
+                `<option value="${v}" ${(s.status || 'nouveau') === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
         </tr>`).join('');
 
       const from = res.total === 0 ? 0 : suggestionsFrom + 1;
@@ -235,8 +242,8 @@
 
       const body = `
           <table>
-            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th><th>Utilisateur</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="4" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
+            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th><th>Utilisateur</th><th>Statut</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
@@ -259,12 +266,119 @@
         suggestionsFrom += SUGGESTIONS_PAGE_SIZE;
         refreshSuggestions();
       });
+      document.querySelectorAll('.suggestion-status').forEach(sel => {
+        sel.addEventListener('change', async (e) => {
+          const id = e.target.closest('tr').dataset.id;
+          const status = e.target.value;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/suggestions/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+          } catch (err) {
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
     }
 
     async function refreshSuggestions() {
       const panel = document.getElementById('suggestions-panel');
       if (panel) panel.outerHTML = await renderSuggestions();
       wireSuggestions();
+    }
+
+    // ── Recherches sans résultat ───────────────────────────────────
+    // Regroupe les requêtes ayant retourné 0 résultat, les plus
+    // fréquentes en premier — à partir des logs déjà collectés par
+    // chaque recherche (search_log.py), aucun nouveau tracking. Simple
+    // "top N" (pas de pagination : au-delà d'une cinquantaine de
+    // requêtes distinctes à 0 résultat, ce sont les plus fréquentes qui
+    // comptent, pas l'exhaustivité).
+    async function renderZeroResults() {
+      const res = await api('/admin/search-logs/zero-results');
+      const rows = res.results.map(r => `
+        <tr>
+          <td>${escapeHtmlStats(r.query)}</td>
+          <td style="text-align:right;">${r.count}</td>
+          <td>${fmtDate(r.last_seen)}</td>
+        </tr>`).join('');
+
+      const body = `
+          <table>
+            <thead><tr><th>Requête</th><th style="text-align:right;">Occurrences</th><th>Dernière fois</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucune recherche sans résultat pour l\'instant.</td></tr>'}</tbody>
+          </table>`;
+      return panelWrap('zero-results-panel', 'Recherches sans résultat',
+        `${res.total_zero_result_searches.toLocaleString('fr-FR')} recherche(s) au total`, body);
+    }
+
+    // ── Journal d'audit ────────────────────────────────────────────
+    // Alimenté par un middleware générique côté API (audit_log.py) —
+    // toute mutation admin réussie y apparaît automatiquement, sans
+    // liste de routes à maintenir ici. "Route"/"Cible"/"Détails" reflètent
+    // directement la requête HTTP plutôt qu'une reformulation en
+    // français par type d'action : plus robuste (une route jamais vue
+    // encore reste lisible) que d'entretenir une table de libellés qui
+    // prendrait forcément du retard sur les routes /admin/* réelles.
+    let auditLogFrom = 0;
+    const AUDIT_LOG_PAGE_SIZE = 30;
+
+    function formatPathParams(params) {
+      if (!params || !Object.keys(params).length) return '<span class="muted">—</span>';
+      return Object.values(params).map(v => escapeHtmlStats(String(v))).join(', ');
+    }
+
+    function formatAuditBody(body) {
+      if (!body || !Object.keys(body).length) return '<span class="muted">—</span>';
+      return Object.entries(body)
+        .map(([k, v]) => `${escapeHtmlStats(k)}: ${escapeHtmlStats(typeof v === 'object' ? JSON.stringify(v) : String(v))}`)
+        .join(', ');
+    }
+
+    async function renderAuditLog() {
+      const res = await api(`/admin/audit-log?size=${AUDIT_LOG_PAGE_SIZE}&from=${auditLogFrom}`);
+      const rows = res.results.map(r => `
+        <tr>
+          <td>${fmtDate(r.timestamp)}</td>
+          <td>${escapeHtmlStats(r.username)}</td>
+          <td>${escapeHtmlStats(r.method)}</td>
+          <td class="mono">${escapeHtmlStats((r.path || '').replace(/^\/admin\//, ''))}</td>
+          <td>${formatPathParams(r.path_params)}</td>
+          <td>${formatAuditBody(r.body)}</td>
+        </tr>`).join('');
+
+      const from = res.total === 0 ? 0 : auditLogFrom + 1;
+      const to   = Math.min(auditLogFrom + AUDIT_LOG_PAGE_SIZE, res.total);
+
+      const body = `
+          <table>
+            <thead><tr><th>Date / heure</th><th>Utilisateur</th><th>Méthode</th><th>Route</th><th>Cible</th><th>Détails</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune action enregistrée pour l\'instant.</td></tr>'}</tbody>
+          </table>
+          <div class="pager">
+            <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
+            <button id="audit-prev" class="secondary" ${auditLogFrom === 0 ? 'disabled' : ''}>← Précédent</button>
+            <button id="audit-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
+          </div>`;
+      return panelWrap('audit-log-panel', "Journal d'audit", 'actions d\'administration réussies, les plus récentes en premier', body);
+    }
+
+    function wireAuditLog() {
+      document.getElementById('audit-prev')?.addEventListener('click', () => {
+        auditLogFrom = Math.max(0, auditLogFrom - AUDIT_LOG_PAGE_SIZE);
+        refreshAuditLog();
+      });
+      document.getElementById('audit-next')?.addEventListener('click', () => {
+        auditLogFrom += AUDIT_LOG_PAGE_SIZE;
+        refreshAuditLog();
+      });
+    }
+
+    async function refreshAuditLog() {
+      const panel = document.getElementById('audit-log-panel');
+      if (panel) panel.outerHTML = await renderAuditLog();
+      wireAuditLog();
     }
 
     // ── Table des recherches ──────────────────────────────────────
@@ -347,7 +461,9 @@
     }
 
     async function refresh() {
-      const results = await Promise.allSettled([renderSummary(), renderNps(), renderSuggestions(), renderLogs()]);
+      const results = await Promise.allSettled([
+        renderSummary(), renderNps(), renderSuggestions(), renderZeroResults(), renderLogs(), renderAuditLog(),
+      ]);
 
       const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
       const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
@@ -356,7 +472,7 @@
         return;
       }
 
-      const labels = ["Vue d'ensemble", 'NPS', 'Suggestions', 'Historique des recherches'];
+      const labels = ["Vue d'ensemble", 'NPS', 'Suggestions', 'Recherches sans résultat', 'Historique des recherches', "Journal d'audit"];
       $app.innerHTML = results.map((r, i) =>
         r.status === 'fulfilled'
           ? r.value
@@ -365,6 +481,7 @@
 
       wireSuggestions();
       wireLogs();
+      wireAuditLog();
     }
 
     refresh();
