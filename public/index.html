@@ -361,12 +361,11 @@
     }
 
     let state = {
-      // ext/author/source : sélection cumulative (plusieurs valeurs à la
-      // fois, combinées en OR côté ES), au même titre que les facettes
-      // "Source" et "Auteur" — folder reste mono-sélection. ext stocke
+      // ext/author/source/folder : sélection cumulative (plusieurs
+      // valeurs à la fois, combinées en OR côté ES). ext stocke
       // directement les valeurs brutes du champ ES (".pdf", ".docx"...),
       // identiques aux clés retournées par facets.extensions.
-      ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null,
+      ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
       // searchId/resultIds : rattachent le pouce et le tracking de clic
       // à LA recherche qui a produit les résultats actuellement affichés
@@ -914,7 +913,7 @@
 
       const foldersBox = document.getElementById('facet-folders');
       foldersBox.innerHTML = (facets.folders || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.folder === f.key ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}">
+        <div class="facet-row${state.folder.includes(f.key) ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}">
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun dossier</div>';
 
@@ -932,7 +931,7 @@
       if (type === 'ext') state.ext = toggleArrayValue(state.ext, value);
       if (type === 'source') state.source = toggleArrayValue(state.source, value);
       if (type === 'author') state.author = toggleArrayValue(state.author, value);
-      if (type === 'folder') state.folder = (state.folder === value) ? null : value;
+      if (type === 'folder') state.folder = toggleArrayValue(state.folder, value);
       state.page = 1;
       doSearch();
     }
@@ -952,7 +951,7 @@
       state.ext.forEach(e => chips.push({ label: 'Type : ' + extLabel(e), clear: () => { state.ext = state.ext.filter(v => v !== e); } }));
       state.source.forEach(s => chips.push({ label: 'Source : ' + s, clear: () => { state.source = state.source.filter(v => v !== s); } }));
       state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
-      if (state.folder) chips.push({ label: 'Dossier : ' + state.folder, clear: () => { state.folder = null; } });
+      state.folder.forEach(f => chips.push({ label: 'Dossier : ' + f, clear: () => { state.folder = state.folder.filter(v => v !== f); } }));
       if (state.dateFrom || state.dateTo) chips.push({
         label: 'Période : ' + (state.dateFrom || '…') + ' → ' + (state.dateTo || '…'),
         clear: () => {
@@ -976,7 +975,7 @@
     }
 
     function clearAllFilters() {
-      state.ext = []; state.author = []; state.folder = null; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.ext = []; state.author = []; state.folder = []; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -987,7 +986,7 @@
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
       // elle-même et le tri, et ramène l'affichage à l'état initial
       // (aucune recherche lancée).
-      state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [] };
+      state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [] };
 
       document.getElementById('q').value = '';
       document.getElementById('sort').value = '_score';
@@ -1069,7 +1068,8 @@
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       const authorLabel = multiLabel(s.author);
       if (authorLabel) tags.push('Auteur : ' + authorLabel);
-      if (s.folder) tags.push('Dossier : ' + s.folder);
+      const folderLabel = multiLabel(s.folder);
+      if (folderLabel) tags.push('Dossier : ' + folderLabel);
       const sourceLabel = multiLabel(s.source);
       if (sourceLabel) tags.push('Source : ' + sourceLabel);
       if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
@@ -1126,7 +1126,7 @@
       // recherches) — 'all' redevient un tableau vide (pas de filtre).
       const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
       state = {
-        ext: extList, author: toArray(s.author), folder: s.folder || null,
+        ext: extList, author: toArray(s.author), folder: toArray(s.folder),
         source: toArray(s.source),
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,

@@ -137,8 +137,8 @@
     }
 
     // Résume les filtres actifs (extension/auteur/dossier/période) au
-    // moment de la recherche — extension/author peuvent être une liste
-    // (sélection cumulative, voir index.html) ou une chaîne unique.
+    // moment de la recherche — extension/author/folder peuvent être une
+    // liste (sélection cumulative, voir index.html) ou une chaîne unique.
     function formatCriteria(r) {
       const tags = [];
       const asList = v => Array.isArray(v) ? v : (v ? [v] : []);
@@ -146,7 +146,8 @@
       if (extList.length) tags.push(extList.map(e => (e || '').replace('.', '').toUpperCase()).join(', '));
       const authorList = asList(r.author);
       if (authorList.length) tags.push('Auteur : ' + authorList.join(', '));
-      if (r.folder) tags.push('Dossier : ' + r.folder);
+      const folderList = asList(r.folder);
+      if (folderList.length) tags.push('Dossier : ' + folderList.join(', '));
       if (r.date_from || r.date_to) tags.push('Période : ' + (r.date_from || '…') + ' → ' + (r.date_to || '…'));
       return tags.length ? tags.map(t => escapeHtmlStats(t)).join(' · ') : '<span class="muted">—</span>';
     }
