@@ -140,6 +140,24 @@
                   border-radius: 99px; flex-shrink: 0; }
     .result-detail-btn { font-size: 12px; color: #185FA5; background: none; border: none; cursor: pointer;
                           padding: 0; margin-top: 8px; text-decoration: underline; font-family: inherit; }
+    .result-select-cb { margin-top: 8px; flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
+
+    /* ── Sélection de documents / listes personnelles ─────────── */
+    .selection-toolbar { display: none; align-items: center; gap: 14px; margin-bottom: 12px;
+                          padding: 10px 14px; background: #E6F1FB; border-radius: 10px;
+                          font-size: 13px; color: #185FA5; }
+    .selection-toolbar button { font-size: 13px; color: #185FA5; background: none; border: none;
+                                 cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+    .list-picker-btn { display: flex; justify-content: space-between; align-items: center; width: 100%;
+                        text-align: left; padding: 8px 10px; border: 1px solid #e5e5e0; border-radius: 8px;
+                        background: #fff; cursor: pointer; font-size: 13px; color: #333; font-family: inherit; }
+    .list-picker-btn:hover { background: #f5f5f3; }
+    .list-doc-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
+                    border-bottom: 1px solid #f0f0ec; }
+    .list-doc-row:last-child { border-bottom: none; }
+    .list-doc-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                       white-space: nowrap; color: #185FA5; font-size: 13px; text-decoration: none; }
+    .list-doc-row a:hover { text-decoration: underline; }
     .archive-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 2px 8px;
                      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: #aaa; margin-top: 4px;
@@ -230,6 +248,10 @@
         <button class="saved-toggle" onclick="toggleSavedPanel()">★ Mes recherches</button>
         <div class="saved-panel" id="saved-panel"></div>
       </div>
+      <div class="saved-wrap" id="lists-wrap" style="display:none;">
+        <button class="saved-toggle" onclick="toggleMyListsPanel()">📋 Mes listes</button>
+        <div class="saved-panel" id="lists-panel"></div>
+      </div>
       <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
       <a href="/help" id="help-link" target="_blank" style="color:#185FA5;">❓ Aide</a>
       <a href="/chat" id="chat-link" style="color:#185FA5; display:none;">Assistant IA →</a>
@@ -303,6 +325,11 @@
           </div>
           </div>
         </div>
+        <div class="selection-toolbar" id="selection-toolbar">
+          <span class="selection-count"></span>
+          <button onclick="openAddToListModal()">📋 Ajouter à une liste</button>
+          <button onclick="clearSelection()">Annuler la sélection</button>
+        </div>
         <div id="results"><p class="empty">Lancez une recherche pour voir les résultats.</p></div>
         <div id="pagination" class="pagination"></div>
         <div id="feedback-bar"></div>
@@ -328,6 +355,10 @@
 
   <div class="modal-overlay" id="suggestion-overlay" onclick="if(event.target===this)closeSuggestionModal()">
     <div class="modal-card" id="suggestion-card" style="max-width:460px;"></div>
+  </div>
+
+  <div class="modal-overlay" id="lists-overlay" onclick="if(event.target===this)closeListsModal()">
+    <div class="modal-card" id="lists-card" style="max-width:460px;"></div>
   </div>
 
   <script>
@@ -408,7 +439,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, lists_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -433,6 +464,8 @@
       // visibilité liée au flag, indépendamment de l'état de la recherche.
       document.getElementById('export-actions').style.display = uiConfigCache.export_enabled ? 'inline-flex' : 'none';
       document.getElementById('help-link').style.display = uiConfigCache.help_enabled ? '' : 'none';
+      document.getElementById('lists-wrap').style.display = uiConfigCache.lists_enabled ? '' : 'none';
+      if (!uiConfigCache.lists_enabled) clearSelection();
       updateAdminLinksVisibility();
     }
 
@@ -489,6 +522,38 @@
     // state.source, donc une sélection faite ici reste reflétée là-bas
     // (et réciproquement) sans code de synchronisation supplémentaire.
     let allSources = [];   // [{name, label, type}], chargé une fois au démarrage
+
+    // ── Sélection de documents / listes personnelles ──────────────
+    // Persiste tant que l'utilisateur ne l'annule pas explicitement ou ne
+    // fait pas un resetSearch() complet — survit volontairement à un
+    // changement de page/tri/filtre (permet de composer une sélection au
+    // fil de plusieurs pages avant de l'ajouter à une liste).
+    let selectedDocs = new Set();
+    let myListsCache = [];   // dernière liste de /lists chargée (panneau + modale)
+
+    function renderSelectionToolbar() {
+      const bar = document.getElementById('selection-toolbar');
+      if (!bar) return;
+      if (!uiConfigCache.lists_enabled || selectedDocs.size === 0) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = 'flex';
+      const n = selectedDocs.size;
+      bar.querySelector('.selection-count').textContent =
+        n + ' document' + (n > 1 ? 's' : '') + ' sélectionné' + (n > 1 ? 's' : '');
+    }
+
+    function toggleDocSelection(docId, checked) {
+      if (checked) selectedDocs.add(docId); else selectedDocs.delete(docId);
+      renderSelectionToolbar();
+    }
+
+    function clearSelection() {
+      selectedDocs.clear();
+      document.querySelectorAll('.result-select-cb').forEach(cb => { cb.checked = false; });
+      renderSelectionToolbar();
+    }
 
     async function loadSearchableSources() {
       try {
@@ -823,9 +888,15 @@
               </span>`;
             })()
           : '';
+        // Décalage du corps (métadonnées/chemin/extrait) pour rester aligné
+        // sous le titre — dépend de si la case de sélection précède l'icône.
+        const bodyIndent = uiConfigCache.lists_enabled ? 75 : 48;
         return `
         <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
           <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
+            ${uiConfigCache.lists_enabled ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+                     onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
+                     aria-label="Sélectionner ce document" />` : ''}
             <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
             <div style="flex:1;min-width:0;">
               <div class="result-title">${r.title || r.filename}</div>
@@ -834,7 +905,7 @@
             <span class="result-caret">▾</span>
           </div>
           <div class="result-body">
-            <div class="result-meta" style="margin-left:48px;">
+            <div class="result-meta" style="margin-left:${bodyIndent}px;">
               ${sourceNote}
               ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
               <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
@@ -844,7 +915,7 @@
               ${archiveNote}
             </div>
             ${r.filepath ? `
-              <div class="result-path" style="margin-left:48px;" title="${escapeHtml(r.filepath)}">
+              <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
                 <i class="ti ti-route" aria-hidden="true"></i>
                 <span class="path-text">${r.filepath}</span>
                 <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
@@ -854,13 +925,14 @@
                         onclick="copyPathClick(event);"
                         title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
               </div>` : ''}
-            ${snippets ? `<div class="snippet" style="margin-left:48px;">${snippets}</div>` : ''}
-            <button class="result-detail-btn" style="margin-left:48px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
+            ${snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
+            <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
           </div>
         </div>`;
       }).join('');
 
       renderPagination(data.total);
+      renderSelectionToolbar();
     }
 
     // Accordéon des résultats — l'en-tête (icône/titre/score) reste
@@ -1075,6 +1147,7 @@
       // elle-même et le tri, et ramène l'affichage à l'état initial
       // (aucune recherche lancée).
       state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
+      clearSelection();
 
       document.getElementById('q').value = '';
       document.getElementById('sort').value = '_score';
@@ -1229,11 +1302,184 @@
       doSearch();
     }
 
-    document.addEventListener('click', (e) => {
-      const wrap = document.querySelector('.saved-wrap');
-      if (wrap && !wrap.contains(e.target)) {
-        document.getElementById('saved-panel').classList.remove('open');
+    // ── Listes de documents ("📋 Mes listes") ─────────────────────
+    // Panneau déroulant (comme "★ Mes recherches") listant les listes de
+    // l'utilisateur ; la modale #lists-overlay est réutilisée pour deux
+    // usages distincts et mutuellement exclusifs : consulter le contenu
+    // d'une liste (viewList) ou choisir/créer la liste où ajouter la
+    // sélection courante (openAddToListModal).
+    async function toggleMyListsPanel() {
+      const panel = document.getElementById('lists-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+
+      panel.classList.add('open');
+      panel.innerHTML = '<div class="saved-empty">Chargement…</div>';
+      try {
+        myListsCache = await api('/lists');
+        renderMyListsPanel();
+      } catch (e) {
+        panel.innerHTML = `<div class="saved-empty">${e.message}</div>`;
       }
+    }
+
+    function renderMyListsPanel() {
+      const panel = document.getElementById('lists-panel');
+      if (!myListsCache.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune liste pour l’instant.</div>';
+        return;
+      }
+      panel.innerHTML = myListsCache.map(l => `
+        <div class="saved-item" data-list-id="${l.id}">
+          <div class="saved-item-main">
+            <div class="saved-item-name">${escapeHtml(l.name)}</div>
+            <div class="saved-item-query">${l.doc_ids.length} document${l.doc_ids.length > 1 ? 's' : ''}</div>
+          </div>
+          <button class="saved-item-delete" title="Supprimer la liste" aria-label="Supprimer la liste">✕</button>
+        </div>`).join('');
+
+      panel.querySelectorAll('.saved-item').forEach(row => {
+        const id = row.dataset.listId;
+        row.querySelector('.saved-item-main').addEventListener('click', () => viewList(id));
+        row.querySelector('.saved-item-delete').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const entry = myListsCache.find(l => l.id === id);
+          if (!confirm(`Supprimer la liste « ${entry.name} » ? Les documents eux-mêmes ne sont pas supprimés.`)) return;
+          try {
+            myListsCache = await api(`/lists/${id}`, { method: 'DELETE' });
+            renderMyListsPanel();
+          } catch (err) {
+            alert('Impossible de supprimer : ' + err.message);
+          }
+        });
+      });
+    }
+
+    // Affiche le contenu d'une liste dans la modale — chaque document est
+    // relu via /document/{id} (pas un simple mget ES) pour que la
+    // vérification ACL déjà faite par cet endpoint s'applique aussi ici :
+    // un document devenu inaccessible entre-temps n'est jamais exposé.
+    async function viewList(listId) {
+      document.getElementById('lists-panel').classList.remove('open');
+      const overlay = document.getElementById('lists-overlay');
+      const card = document.getElementById('lists-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      overlay.classList.add('open');
+
+      const list = myListsCache.find(l => l.id === listId);
+      if (!list) { card.innerHTML = '<p>Liste introuvable.</p>'; return; }
+
+      if (!list.doc_ids.length) {
+        card.innerHTML = `<button class="modal-close" onclick="closeListsModal()" aria-label="Fermer">✕</button>
+          <p style="font-weight:600;font-size:15px;margin-bottom:12px;">${escapeHtml(list.name)}</p>
+          <p class="muted" style="font-size:13px;color:#888;">Liste vide.</p>`;
+        return;
+      }
+
+      const results = await Promise.allSettled(list.doc_ids.map(id => api('/document/' + id)));
+      const rows = results.map((r, i) => {
+        const docId = list.doc_ids[i];
+        const inner = r.status === 'fulfilled'
+          ? `<a href="#" onclick="closeListsModal(); openDetail('${docId}'); return false;">${escapeHtml(r.value.title || r.value.filename)}</a>`
+          : `<span style="flex:1;font-size:13px;color:#c92a2a;">Document indisponible</span>`;
+        return `<div class="list-doc-row">
+          ${inner}
+          <button class="copy-icon-btn" title="Retirer de la liste" aria-label="Retirer de la liste" onclick="removeFromList('${listId}', '${docId}')">${ICON_X}</button>
+        </div>`;
+      }).join('');
+
+      card.innerHTML = `<button class="modal-close" onclick="closeListsModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:12px;">${escapeHtml(list.name)}</p>
+        <div style="max-height:340px;overflow-y:auto;">${rows}</div>`;
+    }
+
+    async function removeFromList(listId, docId) {
+      try {
+        myListsCache = await api(`/lists/${listId}/documents/${docId}`, { method: 'DELETE' });
+        viewList(listId);
+      } catch (e) {
+        alert('Erreur : ' + e.message);
+      }
+    }
+
+    async function openAddToListModal() {
+      if (!selectedDocs.size) return;
+      const overlay = document.getElementById('lists-overlay');
+      const card = document.getElementById('lists-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      overlay.classList.add('open');
+      try {
+        myListsCache = await api('/lists');
+        renderAddToListModal();
+      } catch (e) {
+        card.innerHTML = `<button class="modal-close" onclick="closeListsModal()" aria-label="Fermer">✕</button>
+          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+      }
+    }
+
+    function renderAddToListModal() {
+      const card = document.getElementById('lists-card');
+      const n = selectedDocs.size;
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeListsModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:12px;">📋 Ajouter ${n} document${n > 1 ? 's' : ''} à une liste</p>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px;">
+          ${myListsCache.map(l => `
+            <button class="list-picker-btn" data-list-id="${l.id}">
+              <span>${escapeHtml(l.name)}</span><span style="color:#888;">${l.doc_ids.length}</span>
+            </button>`).join('') || '<p class="muted" style="font-size:13px;color:#888;">Aucune liste pour l’instant.</p>'}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="new-list-name" placeholder="Nouvelle liste…"
+                 style="flex:1;padding:8px 10px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;" />
+          <button class="btn-primary" id="create-list-btn">Créer</button>
+        </div>`;
+      card.querySelectorAll('[data-list-id]').forEach(btn => {
+        btn.addEventListener('click', () => addSelectedDocsToList(btn.dataset.listId));
+      });
+      document.getElementById('create-list-btn').addEventListener('click', createListAndAdd);
+      document.getElementById('new-list-name').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') createListAndAdd();
+      });
+    }
+
+    async function createListAndAdd() {
+      const name = document.getElementById('new-list-name').value.trim();
+      if (!name) { alert('Le nom de la liste ne peut pas être vide.'); return; }
+      try {
+        const newList = await api('/lists', { method: 'POST', body: JSON.stringify({ name }) });
+        await addSelectedDocsToList(newList.id);
+      } catch (e) {
+        alert('Erreur : ' + e.message);
+      }
+    }
+
+    async function addSelectedDocsToList(listId) {
+      const card = document.getElementById('lists-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Ajout en cours…</p>';
+      try {
+        for (const docId of selectedDocs) {
+          await api(`/lists/${listId}/documents`, { method: 'POST', body: JSON.stringify({ doc_id: docId }) });
+        }
+        card.innerHTML = '<div class="nps-thanks">Ajouté !</div>';
+        clearSelection();
+        setTimeout(closeListsModal, 1200);
+      } catch (e) {
+        card.innerHTML = `<button class="modal-close" onclick="closeListsModal()" aria-label="Fermer">✕</button>
+          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+      }
+    }
+
+    function closeListsModal() {
+      document.getElementById('lists-overlay').classList.remove('open');
+    }
+
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.saved-wrap').forEach(wrap => {
+        if (!wrap.contains(e.target)) {
+          wrap.querySelector('.saved-panel')?.classList.remove('open');
+        }
+      });
       const sourcesWrap = document.querySelector('.sources-select-wrap');
       if (sourcesWrap && !sourcesWrap.contains(e.target)) {
         document.getElementById('sources-select-panel').classList.remove('open');
@@ -1338,14 +1584,17 @@
     function anyOverlayOpen() {
       return document.getElementById('modal-overlay').classList.contains('open')
           || document.getElementById('nps-overlay').classList.contains('open')
-          || document.getElementById('suggestion-overlay').classList.contains('open');
+          || document.getElementById('suggestion-overlay').classList.contains('open')
+          || document.getElementById('lists-overlay').classList.contains('open');
     }
 
     function closeAnyOpenPanel() {
       closeModal();
       closeNps();
       closeSuggestionModal();
+      closeListsModal();
       document.getElementById('saved-panel').classList.remove('open');
+      document.getElementById('lists-panel').classList.remove('open');
       document.getElementById('sources-select-panel').classList.remove('open');
     }
 
