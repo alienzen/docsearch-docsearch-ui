@@ -212,7 +212,7 @@
         <div class="saved-panel" id="saved-panel"></div>
       </div>
       <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
-      <a href="/chat" style="color:#185FA5;">Assistant IA →</a>
+      <a href="/chat" id="chat-link" style="color:#185FA5; display:none;">Assistant IA →</a>
       <a href="/admin.html" style="color:#888;">Administration</a>
     </div>
   </header>
@@ -364,6 +364,18 @@
         // restent simplement masqués, la recherche elle-même n'est pas affectée.
       }
       document.getElementById('suggestion-link').style.display = engagementConfig.suggestions_enabled ? '' : 'none';
+    }
+
+    // Bascules d'interface sans rapport avec la satisfaction (ex:
+    // visibilité du lien "Assistant IA") — voir docsearch-api/ui_config.py.
+    async function loadUiConfig() {
+      let cfg = { chat_enabled: true };
+      try {
+        cfg = await api('/ui-config');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : repli sur "activé" par défaut.
+      }
+      document.getElementById('chat-link').style.display = cfg.chat_enabled ? '' : 'none';
     }
 
     // ── Accordéon des facettes (sidebar) ─────────────────────────
@@ -1109,6 +1121,7 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); closeSuggestionModal(); } });
 
     loadEngagementConfig();
+    loadUiConfig();
     loadSearchableSources();
     applyCollapsedFacets();
   </script>

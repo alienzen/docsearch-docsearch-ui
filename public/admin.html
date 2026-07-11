@@ -364,6 +364,31 @@
       });
     }
 
+    // ── Interface (bascules sans rapport avec la satisfaction) ───
+    async function renderUiConfig() {
+      const cfg = await api('/ui-config');
+      const body = `
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-chat" ${cfg.chat_enabled ? 'checked' : ''} />
+              Lien "Assistant IA" dans l'en-tête de recherche
+            </label>
+          </div>`;
+      return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
+    }
+
+    function wireUiConfig() {
+      document.getElementById('ui-chat')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ chat_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+    }
+
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
     // Complète les panneaux CRUD dédiés (Sources / Sources SQL / Sources
     // web ci-dessous, qui gèrent chacun les champs propres à leur type)
@@ -880,10 +905,10 @@
 
       const labels = ['Sources', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
-                      'Toutes les sources', 'Mesure de satisfaction'];
+                      'Toutes les sources', 'Mesure de satisfaction', 'Interface'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(),
+        renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(), renderUiConfig(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -907,7 +932,7 @@
       // premier pour peupler sourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 7, 0, 2, 3, 8, 4, 5, 6];
+      const displayOrder = [1, 7, 0, 2, 3, 8, 9, 4, 5, 6];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -923,6 +948,7 @@
       wireWebSources();
       wireAllSources();
       wireEngagement();
+      wireUiConfig();
       wireScan();
     }
 
