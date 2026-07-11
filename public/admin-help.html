@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>DocSearch — Aide administrateur</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
+    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
+              display: flex; align-items: center; gap: 16px; }
+    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
+    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+
+    .container { max-width: 800px; margin: 0 auto; padding: 24px; }
+    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 24px; }
+    .panel h1 { font-size: 18px; margin-bottom: 16px; }
+    .panel h2 { font-size: 14px; color: #185FA5; margin: 20px 0 8px; }
+    .panel h2:first-of-type { margin-top: 0; }
+    .panel p { font-size: 13px; line-height: 1.6; color: #333; margin-bottom: 8px; }
+    .panel ul { margin: 8px 0 8px 20px; font-size: 13px; line-height: 1.6; color: #333; }
+    .muted { color: #888; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <span class="logo">DocSearch — Administration</span>
+    <a href="/admin.html">← Administration</a>
+  </header>
+
+  <div class="container">
+    <div class="panel">
+      <h1>Aide administrateur</h1>
+      <p class="muted">Cette page sera complétée au fil du temps. Contenu minimal pour l'instant.</p>
+
+      <h2>Sources</h2>
+      <p>Le panneau « Sources » (et ses variantes SQL / web) permet d'enregistrer, d'activer/désactiver la
+         recherche, de modifier le libellé et la description, et de retirer une source. Le nom d'une source
+         (utilisé en interne, dans le registre et dans les documents déjà indexés) ne peut plus être modifié
+         une fois créé — seuls le libellé affiché et la description peuvent être changés à tout moment.</p>
+
+      <h2>État des composants</h2>
+      <p>Vue d'ensemble de l'état d'Elasticsearch, Redis, Tika et des workers Kafka, avec la progression de
+         l'indexation par source.</p>
+
+      <h2>Besoin d'aide ?</h2>
+      <p>Consultez la documentation du projet (docsearch-docs) ou contactez l'équipe technique.</p>
+    </div>
+  </div>
+</body>
+</html>

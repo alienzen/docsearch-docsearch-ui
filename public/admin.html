@@ -66,6 +66,7 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Administration</span>
+    <a href="/admin-help.html">Aide</a>
     <a href="/stats.html">Statistiques</a>
     <a href="/">← Recherche</a>
   </header>
@@ -391,6 +392,12 @@
               <input type="checkbox" id="ui-export" ${cfg.export_enabled ? 'checked' : ''} />
               Export des résultats de recherche (XLSX/DOCX)
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-help" ${cfg.help_enabled ? 'checked' : ''} />
+              Lien "❓ Aide" dans l'en-tête de recherche (et raccourci clavier "?")
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -432,6 +439,15 @@
           alert(`Erreur : ${err.message}`);
         }
       });
+      document.getElementById('ui-help')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ help_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
     }
 
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
@@ -453,6 +469,7 @@
           <td>${escapeHtml(s.label)}</td>
           <td>${TYPE_LABELS[s.type] || s.type}</td>
           <td class="muted">${s.es_index}</td>
+          <td class="muted">${escapeHtml(s.description || '')}</td>
           <td style="text-align:right;">${(s.indexed ?? 0).toLocaleString('fr-FR')}</td>
           <td style="text-align:right;">${formatBytes(s.size_bytes)}</td>
           <td>
@@ -465,8 +482,8 @@
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
           </table>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
@@ -487,21 +504,21 @@
       return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
     }
 
-    // Renommage générique, partagé par les panneaux Sources / Sources SQL /
-    // Sources web — le endpoint (différent par type) répercute aussi le
-    // champ "source" des documents déjà indexés (voir _rename_source_documents
-    // côté docsearch-api), pas seulement le registre.
-    async function renameSourcePrompt(oldName, endpointBase) {
-      const newName = prompt(`Nouveau nom pour la source '${oldName}' (minuscules, chiffres, '-'/'_') :`, oldName);
-      if (!newName || newName.trim() === '' || newName === oldName) return false;
+    // Édition de libellé/description, générique, partagée par les panneaux
+    // Sources / Sources SQL / Sources web — contrairement à l'ancien
+    // renommage, ceci ne touche jamais au nom (clé de registre) d'une
+    // source, donc aucune répercussion sur les documents déjà indexés
+    // n'est nécessaire.
+    async function editSourceFieldPrompt(name, endpointBase, field, currentValue, promptLabel) {
+      const value = prompt(`${promptLabel} pour la source '${name}' :`, currentValue || '');
+      if (value === null || value.trim() === currentValue) return false;
+      const trimmed = value.trim();
+      if (field === 'label' && !trimmed) { alert('Le libellé ne peut pas être vide.'); return false; }
       try {
-        const res = await api(`${endpointBase}/${encodeURIComponent(oldName)}/rename`, {
+        await api(`${endpointBase}/${encodeURIComponent(name)}/${field}`, {
           method: 'POST',
-          body: JSON.stringify({ new_name: newName.trim() }),
+          body: JSON.stringify({ [field]: trimmed }),
         });
-        if (res.documents_updated) {
-          alert(`Source renommée en '${newName.trim()}' — ${res.documents_updated} document(s) mis à jour.`);
-        }
         return true;
       } catch (e) {
         alert(`Erreur : ${e.message}`);
@@ -554,15 +571,18 @@
       const rows = Object.entries(sourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label || name}</td>
           <td>${s.es_index}</td>
           <td class="muted">${s.folder}</td>
-          <td>${name === 'documents' ? '' : '<button class="secondary src-rename">Renommer</button>'}</td>
+          <td class="muted">${s.description || ''}</td>
+          <td><button class="secondary src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary src-edit-description">Modifier la description</button></td>
           <td>${name === 'documents' ? '' : '<button class="danger src-delete">Retirer</button>'}</td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th>Description</th><th></th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
@@ -570,6 +590,9 @@
             <input type="text" id="new-src-index" placeholder="index ES (ex: finance_docs)" />
             <input type="text" id="new-src-subfolder" placeholder="sous-dossier (défaut : = nom)" />
             <input type="text" id="new-src-label" placeholder="libellé (optionnel)" />
+          </div>
+          <div class="row">
+            <input type="text" id="new-src-description" placeholder="description (optionnel)" />
             <button id="add-source">Ajouter</button>
           </div>
           <p class="muted" style="margin-top:8px;">
@@ -581,10 +604,18 @@
     }
 
     function wireSources() {
-      document.querySelectorAll('.src-rename').forEach(btn => {
+      document.querySelectorAll('.src-edit-label').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
-          if (await renameSourcePrompt(name, '/admin/sources')) await refresh();
+          const current = sourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = sourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/sources', 'description', current, 'Nouvelle description')) await refresh();
         });
       });
       document.querySelectorAll('.src-delete').forEach(btn => {
@@ -600,8 +631,9 @@
         const es_index = document.getElementById('new-src-index').value.trim();
         const subfolder = document.getElementById('new-src-subfolder').value.trim() || null;
         const label = document.getElementById('new-src-label').value.trim() || null;
+        const description = document.getElementById('new-src-description').value.trim() || null;
         if (!name || !es_index) { alert('Nom et index ES sont requis.'); return; }
-        await api('/admin/sources', { method: 'POST', body: JSON.stringify({ name, es_index, subfolder, label }) });
+        await api('/admin/sources', { method: 'POST', body: JSON.stringify({ name, es_index, subfolder, label, description }) });
         await refresh();
       });
     }
@@ -617,9 +649,11 @@
     // passage effectif reste au sql-worker déjà actif (poll automatique
     // à son propre intervalle), l'admin ne gère que le registre — l'API
     // ne résout jamais le DSN et ne se connecte jamais à une base SQL.
+    let sqlSourcesCache = {};
+
     async function renderSqlSources() {
-      const sources = await api('/admin/sql-sources');
-      const rows = Object.entries(sources).map(([name, s]) => `
+      sqlSourcesCache = await api('/admin/sql-sources');
+      const rows = Object.entries(sqlSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
           <td>${s.label}</td>
@@ -628,14 +662,16 @@
           <td>${s.id_column}</td>
           <td class="muted">${s.connection_ref}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
-          <td><button class="secondary sql-src-rename">Renommer</button></td>
+          <td class="muted">${s.description || ''}</td>
+          <td><button class="secondary sql-src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary sql-src-edit-description">Modifier la description</button></td>
           <td><button class="danger sql-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th>Description</th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="11" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
           <div style="margin-top:14px;">
             <div class="row">
@@ -653,6 +689,7 @@
             </div>
             <div class="row">
               <input type="text" id="new-sql-label" placeholder="libellé (optionnel)" />
+              <input type="text" id="new-sql-description" placeholder="description (optionnel)" />
             </div>
             <div class="row">
               <textarea id="new-sql-query" rows="2" style="flex:1;font:inherit;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
@@ -673,10 +710,18 @@
     }
 
     function wireSqlSources() {
-      document.querySelectorAll('.sql-src-rename').forEach(btn => {
+      document.querySelectorAll('.sql-src-edit-label').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
-          if (await renameSourcePrompt(name, '/admin/sql-sources')) await refresh();
+          const current = sqlSourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.sql-src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = sqlSourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'description', current, 'Nouvelle description')) await refresh();
         });
       });
       document.querySelectorAll('.sql-src-delete').forEach(btn => {
@@ -697,6 +742,7 @@
         const query           = document.getElementById('new-sql-query').value.trim();
         const fieldsRaw        = document.getElementById('new-sql-fields').value.trim();
         const label            = document.getElementById('new-sql-label').value.trim() || null;
+        const description       = document.getElementById('new-sql-description').value.trim() || null;
 
         if (!name || !connection_ref || !es_index || !id_column || !query || !fieldsRaw) {
           alert('Tous les champs sont requis (nom, connection_ref, index ES, colonne ID, requête, mapping fields).');
@@ -712,7 +758,7 @@
         try {
           await api('/admin/sql-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label }),
+            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label, description }),
           });
           await refresh();
         } catch (e) {
@@ -732,9 +778,11 @@
     // voir docsearch-infra/crawlers/*.yml, et tourne selon son propre
     // planning). web-worker (déjà actif) prend en compte la nouvelle
     // source sous ~5s, sans redémarrage.
+    let webSourcesCache = {};
+
     async function renderWebSources() {
-      const sources = await api('/admin/web-sources');
-      const rows = Object.entries(sources).map(([name, s]) => `
+      webSourcesCache = await api('/admin/web-sources');
+      const rows = Object.entries(webSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
           <td>${s.label}</td>
@@ -742,18 +790,20 @@
           <td>${s.es_index}</td>
           <td>${s.acl_public ? 'public' : 'privé'}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td class="muted">${s.description || ''}</td>
           <td>${s.paused
             ? '<span class="muted">⏸ suspendu</span>'
             : '<span style="color:#1f9254;">▶ actif</span>'}</td>
           <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
-          <td><button class="secondary web-src-rename">Renommer</button></td>
+          <td><button class="secondary web-src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary web-src-edit-description">Modifier la description</button></td>
           <td><button class="danger web-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Crawl</th><th></th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="10" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Description</th><th>Crawl</th><th></th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="12" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
           <p class="muted" style="margin-top:8px;">
             « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
@@ -771,6 +821,9 @@
               <input type="checkbox" id="new-web-public" checked style="flex:0;" />
               <input type="number" id="new-web-interval" placeholder="intervalle (s)" value="3600" min="30" style="max-width:130px;" />
               <input type="text" id="new-web-label" placeholder="libellé (optionnel)" />
+            </div>
+            <div class="row">
+              <input type="text" id="new-web-description" placeholder="description (optionnel)" />
             </div>
             <button id="add-web-source">Ajouter</button>
           </div>
@@ -795,10 +848,18 @@
           await refresh();
         });
       });
-      document.querySelectorAll('.web-src-rename').forEach(btn => {
+      document.querySelectorAll('.web-src-edit-label').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
-          if (await renameSourcePrompt(name, '/admin/web-sources')) await refresh();
+          const current = webSourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/web-sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.web-src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = webSourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/web-sources', 'description', current, 'Nouvelle description')) await refresh();
         });
       });
       document.querySelectorAll('.web-src-delete').forEach(btn => {
@@ -816,6 +877,7 @@
         const acl_public     = document.getElementById('new-web-public').checked;
         const poll_interval_seconds = parseInt(document.getElementById('new-web-interval').value, 10) || 3600;
         const label          = document.getElementById('new-web-label').value.trim() || null;
+        const description    = document.getElementById('new-web-description').value.trim() || null;
 
         if (!name || !crawl_index || !es_index) {
           alert('Nom, index de crawl et index ES final sont requis.');
@@ -824,7 +886,7 @@
         try {
           await api('/admin/web-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds, label }),
+            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds, label, description }),
           });
           await refresh();
         } catch (e) {

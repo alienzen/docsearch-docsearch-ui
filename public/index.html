@@ -116,9 +116,15 @@
                           font-size: 13px; background: #fff; cursor: pointer; }
 
     .result-card { background: #fff; border: 1px solid #e5e5e0; border-radius: 12px; padding: 16px;
-                   margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+                   margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
     .result-card:hover { border-color: #85B7EB; box-shadow: 0 2px 8px rgba(24,95,165,0.08); }
-    .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px; }
+    .result-card.kbd-focus { border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.25); }
+    .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px;
+                     cursor: pointer; user-select: none; }
+    .result-card.collapsed .result-header { margin-bottom: 0; }
+    .result-caret { font-size: 10px; color: #aaa; flex-shrink: 0; transition: transform 0.15s; margin-top: 4px; }
+    .result-card.collapsed .result-caret { transform: rotate(-90deg); }
+    .result-card.collapsed .result-body { display: none; }
     .ext-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
                 justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
     .result-title { font-size: 15px; font-weight: 600; color: #185FA5; margin-bottom: 4px; }
@@ -132,6 +138,8 @@
                border-left: 3px solid #E6F1FB; padding-left: 12px; }
     .score-pill { font-size: 11px; color: #888; background: #f5f5f3; padding: 2px 8px;
                   border-radius: 99px; flex-shrink: 0; }
+    .result-detail-btn { font-size: 12px; color: #185FA5; background: none; border: none; cursor: pointer;
+                          padding: 0; margin-top: 8px; text-decoration: underline; font-family: inherit; }
     .archive-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 2px 8px;
                      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: #aaa; margin-top: 4px;
@@ -223,6 +231,7 @@
         <div class="saved-panel" id="saved-panel"></div>
       </div>
       <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
+      <a href="/help" id="help-link" target="_blank" style="color:#185FA5;">❓ Aide</a>
       <a href="/chat" id="chat-link" style="color:#185FA5; display:none;">Assistant IA →</a>
       <a href="/admin.html" id="admin-link" style="color:#888; display:none;">Administration</a>
     </div>
@@ -278,6 +287,7 @@
           <span id="result-count" style="display:none;"></span>
           <div id="results-actions" style="display:none; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
+            <button class="clear-link" id="compact-view-toggle" style="margin-top:0;" onclick="toggleCompactView()">▤ Vue compacte</button>
             <span id="export-actions" style="display:none; align-items:center; gap:16px;">
               <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
               <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
@@ -371,6 +381,10 @@
       // à LA recherche qui a produit les résultats actuellement affichés
       // (voir renderFeedbackBar() et openDetail()).
       searchId: null, resultIds: [],
+      // Préférence d'affichage, pas un critère de recherche — persistée en
+      // localStorage (voir loadCompactPreference), donc jamais réinitialisée
+      // par resetSearch() (comme collapsedFacets pour les facettes).
+      resultsCompact: loadCompactPreference(),
     };
 
     // Lu une fois au chargement — dit si le pouce/le NPS/les suggestions
@@ -394,7 +408,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -418,6 +432,7 @@
       // qu'aucune recherche n'est lancée) — on ne fixe ici que la
       // visibilité liée au flag, indépendamment de l'état de la recherche.
       document.getElementById('export-actions').style.display = uiConfigCache.export_enabled ? 'inline-flex' : 'none';
+      document.getElementById('help-link').style.display = uiConfigCache.help_enabled ? '' : 'none';
       updateAdminLinksVisibility();
     }
 
@@ -486,12 +501,20 @@
       updateSourcesButtonLabel();
     }
 
+    // Libellé d'affichage d'une source à partir de son nom (clé de
+    // registre) — repli sur le nom brut si la source n'est pas (encore)
+    // dans allSources (ex: chargement de /searchable-sources en échec).
+    function sourceLabel(name) {
+      const found = allSources.find(s => s.name === name);
+      return found ? found.label : name;
+    }
+
     function updateSourcesButtonLabel() {
       const btn = document.getElementById('sources-select-toggle');
       if (!btn) return;
       let label;
       if (!state.source.length) label = 'Toutes les sources';
-      else if (state.source.length === 1) label = state.source[0];
+      else if (state.source.length === 1) label = sourceLabel(state.source[0]);
       else label = `${state.source.length} sources`;
       btn.textContent = label + ' ▾';
     }
@@ -721,12 +744,14 @@
     }
 
     // ── Suggestions libres ───────────────────────────────────────
+    // Anonyme par défaut (case décochée) — cocher "Ne pas rester anonyme"
+    // envoie l'identité (résolue côté API via X-User, voir search_api.py).
     function openSuggestionModal() {
       const card = document.getElementById('suggestion-card');
       card.innerHTML = `
         <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
         <p style="font-weight:600;font-size:15px;margin-bottom:6px;">💡 Suggérer une idée</p>
-        <p style="font-size:13px;color:#666;margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme, aucune identité n'est enregistrée.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
         <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;margin-bottom:10px;">
           <option value="idea">Idée / amélioration</option>
           <option value="bug">Bug</option>
@@ -734,6 +759,10 @@
         </select>
         <textarea id="suggestion-text" rows="5" placeholder="Votre suggestion…"
                   style="width:100%;padding:10px;border:1px solid #d5d5ce;border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#333;cursor:pointer;">
+          <input type="checkbox" id="suggestion-not-anonymous" />
+          Ne pas rester anonyme (associer mon identité à cette suggestion)
+        </label>
         <button class="btn-primary" style="margin-top:12px;width:100%;" onclick="submitSuggestion()">Envoyer</button>`;
       document.getElementById('suggestion-overlay').classList.add('open');
       document.getElementById('suggestion-text').focus();
@@ -743,9 +772,10 @@
       const text = document.getElementById('suggestion-text').value.trim();
       if (!text) { alert('Le champ ne peut pas être vide.'); return; }
       const category = document.getElementById('suggestion-category').value;
+      const anonymous = !document.getElementById('suggestion-not-anonymous').checked;
       const card = document.getElementById('suggestion-card');
       try {
-        await api('/suggestions', { method: 'POST', body: JSON.stringify({ text, category }) });
+        await api('/suggestions', { method: 'POST', body: JSON.stringify({ text, category, anonymous }) });
         card.innerHTML = '<div class="nps-thanks">Merci pour votre suggestion !</div>';
         setTimeout(closeSuggestionModal, 1500);
       } catch (e) {
@@ -759,6 +789,7 @@
 
     function renderResults(data, q) {
       const box = document.getElementById('results');
+      focusedResultIndex = -1;   // les cartes précédentes n'existent plus après ce rendu
       const resultCount = document.getElementById('result-count');
       resultCount.style.display = '';
       document.getElementById('results-actions').style.display = 'flex';
@@ -782,47 +813,95 @@
           : '';
         const sourceNote = r.source
           ? (() => {
+              // Couleur dérivée du nom brut (stable même si le libellé change),
+              // mais texte et initiale affichés basés sur le libellé.
               const sc = sourceColor(r.source);
-              return `<span class="source-badge" title="Source : ${escapeHtml(r.source)}">
-                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(r.source.charAt(0).toUpperCase())}</span>
-                ${escapeHtml(r.source)}
+              const label = sourceLabel(r.source);
+              return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
+                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+                ${escapeHtml(label)}
               </span>`;
             })()
           : '';
         return `
-        <div class="result-card" onclick="openDetail('${r.id}')">
-          <div class="result-header">
+        <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
+          <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
             <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
             <div style="flex:1;min-width:0;">
               <div class="result-title">${r.title || r.filename}</div>
-              <div class="result-meta">
-                ${sourceNote}
-                ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-                <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
-                ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
-                <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
-                ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
-                ${archiveNote}
-              </div>
-              ${r.filepath ? `
-                <div class="result-path" title="${escapeHtml(r.filepath)}">
-                  <i class="ti ti-route" aria-hidden="true"></i>
-                  <span class="path-text">${r.filepath}</span>
-                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
-                          onclick="event.stopPropagation(); copyPathClick(event);"
-                          title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
-                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
-                          onclick="event.stopPropagation(); copyPathClick(event);"
-                          title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
-                </div>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
+            <span class="result-caret">▾</span>
           </div>
-          ${snippets ? `<div class="snippet">${snippets}</div>` : ''}
+          <div class="result-body">
+            <div class="result-meta" style="margin-left:48px;">
+              ${sourceNote}
+              ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
+              <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
+              ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
+              <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
+              ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
+              ${archiveNote}
+            </div>
+            ${r.filepath ? `
+              <div class="result-path" style="margin-left:48px;" title="${escapeHtml(r.filepath)}">
+                <i class="ti ti-route" aria-hidden="true"></i>
+                <span class="path-text">${r.filepath}</span>
+                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
+                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
+              </div>` : ''}
+            ${snippets ? `<div class="snippet" style="margin-left:48px;">${snippets}</div>` : ''}
+            <button class="result-detail-btn" style="margin-left:48px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
+          </div>
         </div>`;
       }).join('');
 
       renderPagination(data.total);
+    }
+
+    // Accordéon des résultats — l'en-tête (icône/titre/score) reste
+    // toujours visible, le corps (métadonnées, chemin, extrait) se
+    // déplie/replie individuellement. Indépendant de state.resultsCompact
+    // (qui fixe seulement l'état INITIAL au rendu, voir toggleCompactView).
+    function toggleResultAccordion(card) {
+      card?.classList.toggle('collapsed');
+    }
+
+    // ── Vue compacte (ensemble de la liste) ──────────────────────
+    const COMPACT_RESULTS_KEY = 'docsearch-compact-results';
+
+    function loadCompactPreference() {
+      try {
+        return localStorage.getItem(COMPACT_RESULTS_KEY) === '1';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function updateCompactToggleLabel() {
+      const btn = document.getElementById('compact-view-toggle');
+      if (btn) btn.textContent = state.resultsCompact ? '▥ Vue détaillée' : '▤ Vue compacte';
+    }
+
+    function toggleCompactView() {
+      state.resultsCompact = !state.resultsCompact;
+      try {
+        localStorage.setItem(COMPACT_RESULTS_KEY, state.resultsCompact ? '1' : '0');
+      } catch (e) {
+        // localStorage indisponible : la préférence reste active pour cette session, simplement pas persistée.
+      }
+      updateCompactToggleLabel();
+      // Applique le nouveau mode à TOUS les résultats actuellement affichés,
+      // en écrasant tout dépli/repli individuel fait entre-temps — un
+      // bouton "vue d'ensemble" doit donner une vue uniforme, pas
+      // composer avec l'état précédent carte par carte.
+      document.querySelectorAll('#results .result-card').forEach(card => {
+        card.classList.toggle('collapsed', state.resultsCompact);
+      });
     }
 
     function renderPagination(total) {
@@ -832,9 +911,9 @@
       const range = [];
       for (let i = Math.max(1, state.page - 2); i <= Math.min(pages, state.page + 2); i++) range.push(i);
       pag.innerHTML =
-        (state.page > 1 ? `<div class="page-btn" onclick="goPage(${state.page - 1})">←</div>` : '') +
+        (state.page > 1 ? `<div class="page-btn page-prev" onclick="goPage(${state.page - 1})">←</div>` : '') +
         range.map(i => `<div class="page-btn${i === state.page ? ' active' : ''}" onclick="goPage(${i})">${i}</div>`).join('') +
-        (state.page < pages ? `<div class="page-btn" onclick="goPage(${state.page + 1})">→</div>` : '');
+        (state.page < pages ? `<div class="page-btn page-next" onclick="goPage(${state.page + 1})">→</div>` : '');
     }
 
     function goPage(n) { state.page = n; doSearch(); }
@@ -865,6 +944,15 @@
       const outer = filepath.split('::')[0];
       const idx = Math.max(outer.lastIndexOf('/'), outer.lastIndexOf('\\'));
       return idx >= 0 ? outer.slice(0, idx) : outer;
+    }
+
+    // Dernier segment d'un chemin de dossier — la facette "Dossier" garde
+    // le chemin complet en valeur/tooltip (title), mais n'affiche que ce
+    // segment pour rester lisible dans la largeur étroite de la sidebar.
+    function folderBasename(path) {
+      const trimmed = path.replace(/[/\\]+$/, '');
+      const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+      return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
     }
 
     async function copyPathClick(e) {
@@ -913,8 +1001,8 @@
 
       const foldersBox = document.getElementById('facet-folders');
       foldersBox.innerHTML = (facets.folders || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.folder.includes(f.key) ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}">
-          <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+        <div class="facet-row${state.folder.includes(f.key) ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}" title="${escapeHtml(f.key)}">
+          <span>${escapeHtml(folderBasename(f.key))}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun dossier</div>';
 
       // Gestionnaires attachés après le rendu plutôt qu'un onclick
@@ -986,7 +1074,7 @@
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
       // elle-même et le tri, et ramène l'affichage à l'état initial
       // (aucune recherche lancée).
-      state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [] };
+      state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
 
       document.getElementById('q').value = '';
       document.getElementById('sort').value = '_score';
@@ -1221,13 +1309,106 @@
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeNps(); closeSuggestionModal(); } });
+    // ── Raccourcis clavier ────────────────────────────────────────
+    // Focus courant sur la liste de résultats, pour ↑/↓/Entrée — remis à
+    // -1 à chaque nouveau rendu (renderResults), les cartes précédentes
+    // n'existant plus dans le DOM.
+    let focusedResultIndex = -1;
+
+    function getResultCards() {
+      return Array.from(document.querySelectorAll('#results .result-card'));
+    }
+
+    function setFocusedResult(index) {
+      const cards = getResultCards();
+      if (!cards.length) return;
+      cards.forEach(c => c.classList.remove('kbd-focus'));
+      focusedResultIndex = Math.max(0, Math.min(index, cards.length - 1));
+      const card = cards[focusedResultIndex];
+      card.classList.add('kbd-focus');
+      card.scrollIntoView({ block: 'nearest' });
+    }
+
+    function isTypingTarget(el) {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
+    function anyOverlayOpen() {
+      return document.getElementById('modal-overlay').classList.contains('open')
+          || document.getElementById('nps-overlay').classList.contains('open')
+          || document.getElementById('suggestion-overlay').classList.contains('open');
+    }
+
+    function closeAnyOpenPanel() {
+      closeModal();
+      closeNps();
+      closeSuggestionModal();
+      document.getElementById('saved-panel').classList.remove('open');
+      document.getElementById('sources-select-panel').classList.remove('open');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeAnyOpenPanel(); return; }
+
+      // Les raccourcis à une lettre ne doivent jamais interférer avec la
+      // saisie (recherche, formulaires des modales…) — seule Échap reste
+      // active en toute circonstance (voir ci-dessus).
+      if (isTypingTarget(e.target) || anyOverlayOpen()) return;
+
+      const resultsVisible = document.getElementById('results-actions').style.display !== 'none';
+
+      switch (e.key) {
+        case '/':
+          e.preventDefault();
+          document.getElementById('q').focus();
+          break;
+        case 'ArrowDown':
+          if (getResultCards().length) { e.preventDefault(); setFocusedResult(focusedResultIndex + 1); }
+          break;
+        case 'ArrowUp':
+          if (getResultCards().length) { e.preventDefault(); setFocusedResult(focusedResultIndex - 1); }
+          break;
+        case 'ArrowLeft': {
+          const prevBtn = document.querySelector('#pagination .page-prev');
+          if (prevBtn) { e.preventDefault(); prevBtn.click(); }
+          break;
+        }
+        case 'ArrowRight': {
+          const nextBtn = document.querySelector('#pagination .page-next');
+          if (nextBtn) { e.preventDefault(); nextBtn.click(); }
+          break;
+        }
+        case 'Enter': {
+          const cards = getResultCards();
+          if (focusedResultIndex >= 0 && cards[focusedResultIndex]) {
+            e.preventDefault();
+            toggleResultAccordion(cards[focusedResultIndex]);
+          }
+          break;
+        }
+        case 'c': case 'C':
+          if (resultsVisible) toggleCompactView();
+          break;
+        case 's': case 'S':
+          if (resultsVisible) saveCurrentSearch();
+          break;
+        case 'r': case 'R':
+          if (resultsVisible) clearAllFilters();
+          break;
+        case '?':
+          if (uiConfigCache.help_enabled) window.open('/help', '_blank');
+          break;
+      }
+    });
 
     loadEngagementConfig();
     loadUiConfig();
     loadIsAdmin();
     loadSearchableSources();
     applyCollapsedFacets();
+    updateCompactToggleLabel();
   </script>
 </body>
 </html>

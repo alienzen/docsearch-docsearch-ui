@@ -227,6 +227,7 @@
           <td>${fmtDate(s.timestamp)}</td>
           <td>${categoryLabel[s.category] || '<span class="muted">—</span>'}</td>
           <td>${escapeHtmlStats(s.text)}</td>
+          <td>${s.username ? escapeHtmlStats(s.username) : '<span class="muted">Anonyme</span>'}</td>
         </tr>`).join('');
 
       const from = res.total === 0 ? 0 : suggestionsFrom + 1;
@@ -234,15 +235,15 @@
 
       const body = `
           <table>
-            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
+            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th><th>Utilisateur</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="4" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
             <button id="suggestions-prev" class="secondary" ${suggestionsFrom === 0 ? 'disabled' : ''}>← Précédent</button>
             <button id="suggestions-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
           </div>`;
-      return panelWrap('suggestions-panel', 'Suggestions', 'recueillies via le lien "💡 Suggérer une idée" — anonymes', body);
+      return panelWrap('suggestions-panel', 'Suggestions', 'recueillies via le lien "💡 Suggérer une idée" — anonymes par défaut', body);
     }
 
     function escapeHtmlStats(str) {
