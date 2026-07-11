@@ -65,6 +65,8 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Statistiques de recherche</span>
+    <button id="toggle-all-panels" onclick="toggleAllPanels()"
+            style="margin-left:auto;background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
     <a href="/admin.html">← Administration</a>
   </header>
 
@@ -100,6 +102,34 @@
       } catch (e) {
         // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
       }
+      updateToggleAllLabel();
+    }
+
+    // Un seul bouton, qui replie ou déplie TOUS les panneaux selon l'état
+    // actuel (même mécanisme que admin.html) — si au moins un est déplié,
+    // l'action est "tout replier" ; une fois tous repliés, elle devient
+    // "tout déplier".
+    function toggleAllPanels() {
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      panels.forEach(p => {
+        p.classList.toggle('collapsed', anyExpanded);
+        if (anyExpanded) collapsedPanels.add(p.id); else collapsedPanels.delete(p.id);
+      });
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+      updateToggleAllLabel();
+    }
+
+    function updateToggleAllLabel() {
+      const btn = document.getElementById('toggle-all-panels');
+      if (!btn) return;
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      btn.textContent = anyExpanded ? 'Tout replier' : 'Tout déplier';
     }
 
     function panelWrap(id, title, subtitle, bodyHtml) {
@@ -482,6 +512,7 @@
       wireSuggestions();
       wireLogs();
       wireAuditLog();
+      updateToggleAllLabel();
     }
 
     refresh();
