@@ -379,6 +379,12 @@
               <input type="checkbox" id="ui-footer" ${cfg.footer_enabled ? 'checked' : ''} />
               Pied de page de la page de recherche
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-admin-links" ${cfg.admin_links_enabled ? 'checked' : ''} />
+              Liens "Administration"/"Statistiques" (même pour les utilisateurs autorisés)
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -397,6 +403,15 @@
         const checked = e.target.checked;
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ footer_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-admin-links')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ admin_links_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
           alert(`Erreur : ${err.message}`);

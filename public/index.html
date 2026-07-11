@@ -384,35 +384,46 @@
       document.getElementById('suggestion-link').style.display = engagementConfig.suggestions_enabled ? '' : 'none';
     }
 
-    // Bascules d'interface sans rapport avec la satisfaction (ex:
-    // visibilité du lien "Assistant IA") — voir docsearch-api/ui_config.py.
-    async function loadUiConfig() {
-      let cfg = { chat_enabled: true, footer_enabled: true };
-      try {
-        cfg = await api('/ui-config');
-      } catch (e) {
-        // Échec silencieux (API indisponible) : repli sur "activé" par défaut.
-      }
-      document.getElementById('chat-link').style.display = cfg.chat_enabled ? '' : 'none';
-      document.getElementById('page-footer').style.display = cfg.footer_enabled ? '' : 'none';
-    }
+    // Liens "Administration"/"Statistiques" : visibles seulement si
+    // l'utilisateur est admin (/is-admin) ET que le flag admin_links_enabled
+    // est actif (/ui-config) — un ET logique entre deux sources chargées
+    // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
+    // même un utilisateur autorisé ne doit plus les voir si l'admin a
+    // désactivé le flag (ex: pendant une maintenance des pages admin).
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true };
+    let isAdminCache = false;
 
-    // Liens "Administration"/"Statistiques" : ces pages exigent déjà
-    // elles-mêmes le groupe admin (403 sinon) — autant ne pas les
-    // proposer à un utilisateur qui n'y a pas accès. /is-admin ne lève
-    // jamais d'erreur (voir admin_auth.is_admin()), contrairement à un
-    // vrai appel /admin/*.
-    async function loadIsAdmin() {
-      let admin = false;
-      try {
-        admin = (await api('/is-admin')).is_admin;
-      } catch (e) {
-        // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
-      }
-      const display = admin ? '' : 'none';
+    function updateAdminLinksVisibility() {
+      const display = (isAdminCache && uiConfigCache.admin_links_enabled) ? '' : 'none';
       document.getElementById('admin-link').style.display = display;
       document.getElementById('footer-stats-link').style.display = display;
       document.getElementById('footer-admin-link').style.display = display;
+    }
+
+    // Bascules d'interface sans rapport avec la satisfaction (ex:
+    // visibilité du lien "Assistant IA") — voir docsearch-api/ui_config.py.
+    async function loadUiConfig() {
+      try {
+        uiConfigCache = await api('/ui-config');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : repli sur "activé" par défaut.
+      }
+      document.getElementById('chat-link').style.display = uiConfigCache.chat_enabled ? '' : 'none';
+      document.getElementById('page-footer').style.display = uiConfigCache.footer_enabled ? '' : 'none';
+      updateAdminLinksVisibility();
+    }
+
+    // Ces pages exigent déjà elles-mêmes le groupe admin (403 sinon) —
+    // autant ne pas les proposer à un utilisateur qui n'y a pas accès.
+    // /is-admin ne lève jamais d'erreur (voir admin_auth.is_admin()),
+    // contrairement à un vrai appel /admin/*.
+    async function loadIsAdmin() {
+      try {
+        isAdminCache = (await api('/is-admin')).is_admin;
+      } catch (e) {
+        // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
+      }
+      updateAdminLinksVisibility();
     }
 
     // ── Accordéon des facettes (sidebar) ─────────────────────────
