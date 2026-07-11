@@ -86,7 +86,11 @@
     .facet-section { margin-bottom: 18px; }
     .facet-section:last-child { margin-bottom: 0; }
     .facet-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-                   color: #888; margin-bottom: 8px; }
+                   color: #888; margin-bottom: 8px; display: flex; align-items: center;
+                   justify-content: space-between; cursor: pointer; user-select: none; }
+    .facet-caret { font-size: 9px; color: #aaa; transition: transform 0.15s; flex-shrink: 0; }
+    .facet-section.collapsed .facet-caret { transform: rotate(-90deg); }
+    .facet-section.collapsed .facet-body { display: none; }
     .facet-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 6px;
                  border-radius: 6px; cursor: pointer; font-size: 13px; color: #333; }
     .facet-row:hover { background: #f0f0ec; }
@@ -218,30 +222,40 @@
 
     <div class="layout">
       <aside class="sidebar">
-        <div class="facet-section">
-          <div class="facet-title">Type de fichier</div>
-          <div id="facet-extensions"><div class="facet-empty">Lancez une recherche</div></div>
-        </div>
-        <div class="facet-section">
-          <div class="facet-title">Période (modification)</div>
-          <div class="date-range">
-            <label for="date-from">Du</label>
-            <input type="date" id="date-from" onchange="applyDateRange()" />
-            <label for="date-to">Au</label>
-            <input type="date" id="date-to" onchange="applyDateRange()" />
+        <div class="facet-section" id="facet-section-extensions">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-extensions')">Type de fichier<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-extensions"><div class="facet-empty">Lancez une recherche</div></div>
           </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Source</div>
-          <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-period">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-period')">Période (modification)<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div class="date-range">
+              <label for="date-from">Du</label>
+              <input type="date" id="date-from" onchange="applyDateRange()" />
+              <label for="date-to">Au</label>
+              <input type="date" id="date-to" onchange="applyDateRange()" />
+            </div>
+          </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Auteur</div>
-          <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-sources">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-sources')">Source<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Dossier</div>
-          <div id="facet-folders"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-authors">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-authors')">Auteur<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
+        </div>
+        <div class="facet-section" id="facet-section-folders">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-folders')">Dossier<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-folders"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
         </div>
         <button class="clear-link" id="clear-all" style="display:none;" onclick="clearAllFilters()">
           Effacer tous les filtres
@@ -250,7 +264,7 @@
 
       <main>
         <div class="stats-bar">
-          <span id="result-count">Entrez une recherche</span>
+          <span id="result-count" style="display:none;"></span>
           <div style="display:flex; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
           <div class="sort-select">
@@ -350,6 +364,36 @@
         // restent simplement masqués, la recherche elle-même n'est pas affectée.
       }
       document.getElementById('suggestion-link').style.display = engagementConfig.suggestions_enabled ? '' : 'none';
+    }
+
+    // ── Accordéon des facettes (sidebar) ─────────────────────────
+    // Repli/dépli persisté en localStorage (par navigateur/poste) — un
+    // utilisateur qui replie systématiquement "Auteur" ou "Dossier" n'a
+    // pas à le refaire à chaque recherche ou rechargement de page.
+    const FACET_COLLAPSED_KEY = 'docsearch-collapsed-facets';
+
+    function loadCollapsedFacets() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(FACET_COLLAPSED_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedFacets = loadCollapsedFacets();
+
+    function applyCollapsedFacets() {
+      collapsedFacets.forEach(id => document.getElementById(id)?.classList.add('collapsed'));
+    }
+
+    function toggleFacetAccordion(id) {
+      if (collapsedFacets.has(id)) collapsedFacets.delete(id); else collapsedFacets.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedFacets.has(id));
+      try {
+        localStorage.setItem(FACET_COLLAPSED_KEY, JSON.stringify([...collapsedFacets]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
     }
 
     function toggleArrayValue(arr, value) {
@@ -601,7 +645,9 @@
 
     function renderResults(data, q) {
       const box = document.getElementById('results');
-      document.getElementById('result-count').textContent =
+      const resultCount = document.getElementById('result-count');
+      resultCount.style.display = '';
+      resultCount.textContent =
         data.total.toLocaleString('fr-FR') + ' résultat' + (data.total > 1 ? 's' : '') +
         (q ? ` pour « ${q} »` : '');
 
@@ -832,7 +878,9 @@
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
 
-      document.getElementById('result-count').textContent = 'Entrez une recherche';
+      const resultCount = document.getElementById('result-count');
+      resultCount.textContent = '';
+      resultCount.style.display = 'none';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
       document.getElementById('feedback-bar').innerHTML = '';
@@ -1060,6 +1108,7 @@
 
     loadEngagementConfig();
     loadSearchableSources();
+    applyCollapsedFacets();
   </script>
 </body>
 </html>
