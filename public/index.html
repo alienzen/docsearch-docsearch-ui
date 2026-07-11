@@ -265,7 +265,7 @@
       <main>
         <div class="stats-bar">
           <span id="result-count" style="display:none;"></span>
-          <div style="display:flex; align-items:center; gap:16px;">
+          <div id="results-actions" style="display:none; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
           <div class="sort-select">
             Trier par :
@@ -647,6 +647,7 @@
       const box = document.getElementById('results');
       const resultCount = document.getElementById('result-count');
       resultCount.style.display = '';
+      document.getElementById('results-actions').style.display = 'flex';
       resultCount.textContent =
         data.total.toLocaleString('fr-FR') + ' résultat' + (data.total > 1 ? 's' : '') +
         (q ? ` pour « ${q} »` : '');
@@ -881,6 +882,7 @@
       const resultCount = document.getElementById('result-count');
       resultCount.textContent = '';
       resultCount.style.display = 'none';
+      document.getElementById('results-actions').style.display = 'none';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
       document.getElementById('feedback-bar').innerHTML = '';
