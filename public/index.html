@@ -12,9 +12,13 @@
               display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
     .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
     .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; }
-    .search-wrap input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
+    /* Combinateur d'enfant direct (>) plutôt qu'un sélecteur descendant :
+       .sources-select-panel (cases à cocher) est aussi niché dans
+       .search-wrap, plusieurs niveaux plus profond — un sélecteur
+       "input" générique les attrapait par erreur (flex:1, gros padding). */
+    .search-wrap > input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
                          border-radius: 8px; font-size: 15px; outline: none; }
-    .search-wrap input:focus { border-color: #185FA5; }
+    .search-wrap > input:focus { border-color: #185FA5; }
     .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: #0C447C; }
