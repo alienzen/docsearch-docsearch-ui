@@ -665,9 +665,13 @@
     // à son propre intervalle), l'admin ne gère que le registre — l'API
     // ne résout jamais le DSN et ne se connecte jamais à une base SQL.
     let sqlSourcesCache = {};
+    let sqlDsnsCache = [];
 
     async function renderSqlSources() {
-      sqlSourcesCache = await api('/admin/sql-sources');
+      [sqlSourcesCache, sqlDsnsCache] = await Promise.all([
+        api('/admin/sql-sources'),
+        api('/admin/sql-dsns'),
+      ]);
       const rows = Object.entries(sqlSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
@@ -695,7 +699,7 @@
                 <option value="postgresql">postgresql</option>
                 <option value="mysql">mysql</option>
               </select>
-              <input type="text" id="new-sql-connref" placeholder="connection_ref (ex: CLIENTS_PG_DSN)" />
+              <input type="text" id="new-sql-connref" list="sql-dsn-names" placeholder="connection_ref (ex: CLIENTS_PG_DSN — variable d'environnement ou DSN enregistré ci-dessous)" />
             </div>
             <div class="row">
               <input type="text" id="new-sql-index" placeholder="index ES (ex: clients_pg_sql)" />
@@ -718,8 +722,41 @@
           </div>
           <p class="muted" style="margin-top:8px;">
             <code>connection_ref</code> est le NOM d'une variable d'environnement contenant le DSN complet
-            (définie dans le .env de docsearch-infra) — jamais le DSN lui-même, qui ne transite ni par ici
-            ni par Redis. Types ES possibles pour le mapping : keyword, text, long, double, date, boolean.
+            (définie dans le .env de docsearch-infra) OU le nom d'un DSN chiffré enregistré ci-dessous —
+            la variable d'environnement reste TOUJOURS prioritaire si elle existe. Le DSN en clair ne
+            transite jamais par ici ni par Redis dans le premier cas ; dans le second, il est chiffré avant
+            stockage (voir ci-dessous). Types ES possibles pour le mapping : keyword, text, long, double,
+            date, boolean.
+          </p>
+          <datalist id="sql-dsn-names">
+            ${sqlDsnsCache.map(d => `<option value="${d.name}"></option>`).join('')}
+          </datalist>
+
+          <h3 style="margin-top:22px;">DSN chiffrés (enregistrés depuis ce panneau)</h3>
+          <table>
+            <thead><tr><th>Nom</th><th>Indice (schéma + hôte, sans identifiants)</th><th></th></tr></thead>
+            <tbody>${sqlDsnsCache.map(d => `
+              <tr data-name="${d.name}">
+                <td>${d.name}</td>
+                <td class="muted">${d.hint}</td>
+                <td><button class="danger sql-dsn-delete">Retirer</button></td>
+              </tr>`).join('') || '<tr><td colspan="3" class="muted">Aucun DSN enregistré ici.</td></tr>'}
+            </tbody>
+          </table>
+          <div style="margin-top:14px;">
+            <div class="row">
+              <input type="text" id="new-dsn-name" placeholder="nom (ex: CLIENTS_PG_DSN)" />
+              <input type="password" id="new-dsn-value" placeholder="DSN complet (ex: postgresql+psycopg2://user:motdepasse@host:5432/db)" style="flex:2;" />
+            </div>
+            <button id="add-sql-dsn">Enregistrer le DSN</button>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Alternative à une variable d'environnement dans le <code>.env</code> de docsearch-infra : ce
+            DSN est chiffré (Fernet) puis stocké dans Redis, sans redémarrage de conteneur, sans accès
+            SSH/hôte. Il n'est plus jamais réaffiché après l'enregistrement — seul l'indice ci-dessus
+            (schéma + hôte, jamais les identifiants) reste consultable. Nécessite
+            <code>DSN_ENCRYPTION_KEY</code> configurée côté docsearch-api ET docsearch-ingestion (voir
+            .env.example).
           </p>`;
       return panelWrap('sqlsources-panel', 'Sources SQL', 'requêtes PostgreSQL/MySQL indexées, réconciliées à chaque passage', body);
     }
@@ -775,6 +812,35 @@
             method: 'POST',
             body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label, description }),
           });
+          await refresh();
+        } catch (e) {
+          alert(`Erreur : ${e.message}`);
+        }
+      });
+
+      document.querySelectorAll('.sql-dsn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (!confirm(`Retirer le DSN chiffré '${name}' ? Toute source SQL dont le connection_ref pointe vers ce nom échouera à son prochain passage (sauf si une variable d'environnement du même nom existe).`)) return;
+          try {
+            await api(`/admin/sql-dsns/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            await refresh();
+          } catch (e) {
+            alert(`Erreur : ${e.message}`);
+          }
+        });
+      });
+
+      document.getElementById('add-sql-dsn')?.addEventListener('click', async () => {
+        const name = document.getElementById('new-dsn-name').value.trim();
+        const dsn  = document.getElementById('new-dsn-value').value.trim();
+        if (!name || !dsn) {
+          alert('Le nom et le DSN sont tous les deux requis.');
+          return;
+        }
+        try {
+          await api('/admin/sql-dsns', { method: 'POST', body: JSON.stringify({ name, dsn }) });
+          document.getElementById('new-dsn-value').value = ''; // jamais laisser le DSN dans le champ après envoi
           await refresh();
         } catch (e) {
           alert(`Erreur : ${e.message}`);
