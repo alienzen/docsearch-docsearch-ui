@@ -25,9 +25,14 @@
     .header-links a { font-size: 14px; text-decoration: none; }
 
     /* ── Présélection de sources (avant recherche) ────────────── */
-    .sources-select-wrap { position: relative; }
+    /* .sources-select-wrap est le flex item de .search-wrap (donc étiré
+       en hauteur par align-items: stretch, comme l'étaient input/boutons)
+       — display:flex dessus fait que le bouton À L'INTÉRIEUR suit cet
+       étirement à son tour, plutôt que de garder sa hauteur naturelle et
+       flotter mal aligné en haut de son enveloppe. */
+    .sources-select-wrap { position: relative; display: flex; flex-shrink: 0; }
     .sources-select-toggle { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
-                              font-size: 13px; background: #fff; color: #555; cursor: pointer;
+                              font-size: 13px; font-family: inherit; background: #fff; color: #555; cursor: pointer;
                               white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .sources-select-panel { display: none; position: absolute; top: 38px; left: 0; min-width: 220px;
                              max-height: 280px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
