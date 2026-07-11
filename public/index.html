@@ -1537,7 +1537,19 @@
           <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
-          <div class="modal-row"><span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span><span class="v">${doc.folder || '—'}</span></div>
+          <div class="modal-row">
+            <span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span>
+            <span class="v" style="display:inline-flex;align-items:center;gap:2px;">
+              ${doc.folder || '—'}
+              ${doc.filepath ? `
+                <button class="copy-icon-btn" data-path="${escapeHtml(doc.filepath)}" data-copy="dir"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
+                <button class="copy-icon-btn" data-path="${escapeHtml(doc.filepath)}" data-copy="full"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>` : ''}
+            </span>
+          </div>
           <div class="modal-row"><span class="k"><i class="ti ti-file" aria-hidden="true"></i>Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
           ${isArchiveMember ? `<div class="modal-row"><span class="k"><i class="ti ti-file-zip" aria-hidden="true"></i>Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
         </div>
