@@ -990,7 +990,7 @@
       const sourcesBox = document.getElementById('facet-sources');
       sourcesBox.innerHTML = (facets.sources || []).filter(f => f.key).map(f => `
         <div class="facet-row${state.source.includes(f.key) ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
-          <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+          <span>${escapeHtml(sourceLabel(f.key))}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucune source</div>';
 
       const authorsBox = document.getElementById('facet-authors');
