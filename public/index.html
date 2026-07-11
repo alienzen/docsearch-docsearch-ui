@@ -292,7 +292,7 @@
     </div>
   </div>
 
-  <footer class="footer">
+  <footer class="footer" id="page-footer">
     <span>DocSearch — Moteur de recherche documentaire</span>
     <div class="footer-links">
       <a href="/stats.html">Statistiques</a>
@@ -384,13 +384,14 @@
     // Bascules d'interface sans rapport avec la satisfaction (ex:
     // visibilité du lien "Assistant IA") — voir docsearch-api/ui_config.py.
     async function loadUiConfig() {
-      let cfg = { chat_enabled: true };
+      let cfg = { chat_enabled: true, footer_enabled: true };
       try {
         cfg = await api('/ui-config');
       } catch (e) {
         // Échec silencieux (API indisponible) : repli sur "activé" par défaut.
       }
       document.getElementById('chat-link').style.display = cfg.chat_enabled ? '' : 'none';
+      document.getElementById('page-footer').style.display = cfg.footer_enabled ? '' : 'none';
     }
 
     // ── Accordéon des facettes (sidebar) ─────────────────────────
