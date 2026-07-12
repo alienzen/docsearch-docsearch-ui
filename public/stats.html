@@ -16,8 +16,14 @@
                  flex-direction: column; gap: 24px; }
 
     .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
-    .panel h2 { font-size: 16px; margin-bottom: 14px; color: #1a1a18; }
     .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+
+    .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                     font-size: 16px; color: #1a1a18; margin: 0; cursor: pointer; user-select: none; }
+    .accordion-caret { font-size: 11px; color: #888; flex-shrink: 0; transition: transform 0.15s; }
+    .panel.collapsed .accordion-caret { transform: rotate(-90deg); }
+    .panel-body { margin-top: 14px; }
+    .panel.collapsed .panel-body { display: none; }
 
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; margin-bottom: 16px; }
@@ -59,6 +65,8 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Statistiques de recherche</span>
+    <button id="toggle-all-panels" onclick="toggleAllPanels()"
+            style="margin-left:auto;background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
     <a href="/admin.html">← Administration</a>
   </header>
 
@@ -72,8 +80,71 @@
     let currentFrom = 0;
     let filters = { q: '' };
 
-    async function api(path) {
-      const res = await fetch(path);
+    // ── Accordéon (même mécanisme que admin.html — clé localStorage
+    // distincte pour ne pas mélanger l'état replié des deux pages) ──
+    const COLLAPSED_STORAGE_KEY = 'docsearch-stats-collapsed-panels';
+
+    function loadCollapsedPanels() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedPanels = loadCollapsedPanels();
+
+    function toggleAccordion(id) {
+      if (collapsedPanels.has(id)) collapsedPanels.delete(id); else collapsedPanels.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedPanels.has(id));
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+      updateToggleAllLabel();
+    }
+
+    // Un seul bouton, qui replie ou déplie TOUS les panneaux selon l'état
+    // actuel (même mécanisme que admin.html) — si au moins un est déplié,
+    // l'action est "tout replier" ; une fois tous repliés, elle devient
+    // "tout déplier".
+    function toggleAllPanels() {
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      panels.forEach(p => {
+        p.classList.toggle('collapsed', anyExpanded);
+        if (anyExpanded) collapsedPanels.add(p.id); else collapsedPanels.delete(p.id);
+      });
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+      updateToggleAllLabel();
+    }
+
+    function updateToggleAllLabel() {
+      const btn = document.getElementById('toggle-all-panels');
+      if (!btn) return;
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      btn.textContent = anyExpanded ? 'Tout replier' : 'Tout déplier';
+    }
+
+    function panelWrap(id, title, subtitle, bodyHtml) {
+      return `
+        <div class="panel${collapsedPanels.has(id) ? ' collapsed' : ''}" id="${id}">
+          <h2 class="panel-header" onclick="toggleAccordion('${id}')">
+            <span>${title}${subtitle ? ` <small>${subtitle}</small>` : ''}</span>
+            <span class="accordion-caret">▾</span>
+          </h2>
+          <div class="panel-body">${bodyHtml}</div>
+        </div>`;
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const err = new Error(body.detail || `Erreur ${res.status}`);
@@ -95,6 +166,22 @@
       return shown.join(', ') + (rest > 0 ? ` <span class="muted">+${rest}</span>` : '');
     }
 
+    // Résume les filtres actifs (extension/auteur/dossier/période) au
+    // moment de la recherche — extension/author/folder peuvent être une
+    // liste (sélection cumulative, voir index.html) ou une chaîne unique.
+    function formatCriteria(r) {
+      const tags = [];
+      const asList = v => Array.isArray(v) ? v : (v ? [v] : []);
+      const extList = asList(r.extension);
+      if (extList.length) tags.push(extList.map(e => (e || '').replace('.', '').toUpperCase()).join(', '));
+      const authorList = asList(r.author);
+      if (authorList.length) tags.push('Auteur : ' + authorList.join(', '));
+      const folderList = asList(r.folder);
+      if (folderList.length) tags.push('Dossier : ' + folderList.join(', '));
+      if (r.date_from || r.date_to) tags.push('Période : ' + (r.date_from || '…') + ' → ' + (r.date_to || '…'));
+      return tags.length ? tags.map(t => escapeHtmlStats(t)).join(' · ') : '<span class="muted">—</span>';
+    }
+
     // ── Cartes de résumé + répartition par jour ──────────────────
     async function renderSummary() {
       const s = await api('/admin/search-logs/summary');
@@ -106,9 +193,10 @@
           <div class="label">${b.date.slice(5)}</div>
         </div>`).join('');
 
-      return `
-        <div class="panel">
-          <h2>Vue d'ensemble</h2>
+      const feedbackTotal = s.feedback_up + s.feedback_down;
+      const feedbackPct = feedbackTotal ? Math.round((s.feedback_up / feedbackTotal) * 100) : null;
+
+      const body = `
           <div class="status-grid">
             <div class="status-card">
               <div class="name">Recherches effectuées</div>
@@ -118,12 +206,209 @@
               <div class="name">Utilisateurs distincts</div>
               <div class="value">${s.unique_users}</div>
             </div>
+            <div class="status-card">
+              <div class="name">Avis positifs (👍)</div>
+              <div class="value">${feedbackPct !== null ? feedbackPct + ' %' : '—'}</div>
+              <div class="muted">${feedbackTotal} avis (${s.feedback_up} 👍 / ${s.feedback_down} 👎)</div>
+            </div>
           </div>
           ${s.by_day.length ? `
             <div class="muted" style="margin-bottom:8px;">Recherches par jour (14 derniers jours)</div>
             <div class="day-bars">${bars}</div>
-          ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}
-        </div>`;
+          ` : '<p class="muted">Aucune recherche enregistrée pour l\'instant.</p>'}`;
+      return panelWrap('summary-panel', "Vue d'ensemble", null, body);
+    }
+
+    // ── NPS ────────────────────────────────────────────────────
+    async function renderNps() {
+      const n = await api('/admin/nps-summary');
+      const body = `
+          <div class="status-grid">
+            <div class="status-card">
+              <div class="name">Score NPS</div>
+              <div class="value">${n.nps_score !== null ? n.nps_score : '—'}</div>
+              <div class="muted">${n.total_responses} réponse(s)</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Promoteurs (9-10)</div>
+              <div class="value">${n.promoters}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Passifs (7-8)</div>
+              <div class="value">${n.passives}</div>
+            </div>
+            <div class="status-card">
+              <div class="name">Détracteurs (0-6)</div>
+              <div class="value">${n.detractors}</div>
+            </div>
+          </div>`;
+      return panelWrap('nps-panel', 'NPS', 'recommanderiez-vous DocSearch à un collègue ?', body);
+    }
+
+    // ── Suggestions libres ───────────────────────────────────────
+    let suggestionsFrom = 0;
+    const SUGGESTIONS_PAGE_SIZE = 20;
+    const categoryLabel = { bug: 'Bug', idea: 'Idée', other: 'Autre' };
+    const SUGGESTION_STATUS_LABELS = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité' };
+
+    async function renderSuggestions() {
+      const res = await api(`/admin/suggestions?size=${SUGGESTIONS_PAGE_SIZE}&from=${suggestionsFrom}`);
+      const rows = res.results.map(s => `
+        <tr data-id="${s.id}">
+          <td>${fmtDate(s.timestamp)}</td>
+          <td>${categoryLabel[s.category] || '<span class="muted">—</span>'}</td>
+          <td>${escapeHtmlStats(s.text)}</td>
+          <td>${s.username ? escapeHtmlStats(s.username) : '<span class="muted">Anonyme</span>'}</td>
+          <td>
+            <select class="suggestion-status">
+              ${Object.entries(SUGGESTION_STATUS_LABELS).map(([v, l]) =>
+                `<option value="${v}" ${(s.status || 'nouveau') === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
+        </tr>`).join('');
+
+      const from = res.total === 0 ? 0 : suggestionsFrom + 1;
+      const to   = Math.min(suggestionsFrom + SUGGESTIONS_PAGE_SIZE, res.total);
+
+      const body = `
+          <table>
+            <thead><tr><th>Date / heure</th><th>Catégorie</th><th>Suggestion</th><th>Utilisateur</th><th>Statut</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune suggestion pour l\'instant.</td></tr>'}</tbody>
+          </table>
+          <div class="pager">
+            <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
+            <button id="suggestions-prev" class="secondary" ${suggestionsFrom === 0 ? 'disabled' : ''}>← Précédent</button>
+            <button id="suggestions-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
+          </div>`;
+      return panelWrap('suggestions-panel', 'Suggestions', 'recueillies via le lien "💡 Suggérer une idée" — anonymes par défaut', body);
+    }
+
+    function escapeHtmlStats(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function wireSuggestions() {
+      document.getElementById('suggestions-prev')?.addEventListener('click', () => {
+        suggestionsFrom = Math.max(0, suggestionsFrom - SUGGESTIONS_PAGE_SIZE);
+        refreshSuggestions();
+      });
+      document.getElementById('suggestions-next')?.addEventListener('click', () => {
+        suggestionsFrom += SUGGESTIONS_PAGE_SIZE;
+        refreshSuggestions();
+      });
+      document.querySelectorAll('.suggestion-status').forEach(sel => {
+        sel.addEventListener('change', async (e) => {
+          const id = e.target.closest('tr').dataset.id;
+          const status = e.target.value;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/suggestions/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+          } catch (err) {
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function refreshSuggestions() {
+      const panel = document.getElementById('suggestions-panel');
+      if (panel) panel.outerHTML = await renderSuggestions();
+      wireSuggestions();
+    }
+
+    // ── Recherches sans résultat ───────────────────────────────────
+    // Regroupe les requêtes ayant retourné 0 résultat, les plus
+    // fréquentes en premier — à partir des logs déjà collectés par
+    // chaque recherche (search_log.py), aucun nouveau tracking. Simple
+    // "top N" (pas de pagination : au-delà d'une cinquantaine de
+    // requêtes distinctes à 0 résultat, ce sont les plus fréquentes qui
+    // comptent, pas l'exhaustivité).
+    async function renderZeroResults() {
+      const res = await api('/admin/search-logs/zero-results');
+      const rows = res.results.map(r => `
+        <tr>
+          <td>${escapeHtmlStats(r.query)}</td>
+          <td style="text-align:right;">${r.count}</td>
+          <td>${fmtDate(r.last_seen)}</td>
+        </tr>`).join('');
+
+      const body = `
+          <table>
+            <thead><tr><th>Requête</th><th style="text-align:right;">Occurrences</th><th>Dernière fois</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucune recherche sans résultat pour l\'instant.</td></tr>'}</tbody>
+          </table>`;
+      return panelWrap('zero-results-panel', 'Recherches sans résultat',
+        `${res.total_zero_result_searches.toLocaleString('fr-FR')} recherche(s) au total`, body);
+    }
+
+    // ── Journal d'audit ────────────────────────────────────────────
+    // Alimenté par un middleware générique côté API (audit_log.py) —
+    // toute mutation admin réussie y apparaît automatiquement, sans
+    // liste de routes à maintenir ici. "Route"/"Cible"/"Détails" reflètent
+    // directement la requête HTTP plutôt qu'une reformulation en
+    // français par type d'action : plus robuste (une route jamais vue
+    // encore reste lisible) que d'entretenir une table de libellés qui
+    // prendrait forcément du retard sur les routes /admin/* réelles.
+    let auditLogFrom = 0;
+    const AUDIT_LOG_PAGE_SIZE = 30;
+
+    function formatPathParams(params) {
+      if (!params || !Object.keys(params).length) return '<span class="muted">—</span>';
+      return Object.values(params).map(v => escapeHtmlStats(String(v))).join(', ');
+    }
+
+    function formatAuditBody(body) {
+      if (!body || !Object.keys(body).length) return '<span class="muted">—</span>';
+      return Object.entries(body)
+        .map(([k, v]) => `${escapeHtmlStats(k)}: ${escapeHtmlStats(typeof v === 'object' ? JSON.stringify(v) : String(v))}`)
+        .join(', ');
+    }
+
+    async function renderAuditLog() {
+      const res = await api(`/admin/audit-log?size=${AUDIT_LOG_PAGE_SIZE}&from=${auditLogFrom}`);
+      const rows = res.results.map(r => `
+        <tr>
+          <td>${fmtDate(r.timestamp)}</td>
+          <td>${escapeHtmlStats(r.username)}</td>
+          <td>${escapeHtmlStats(r.method)}</td>
+          <td class="mono">${escapeHtmlStats((r.path || '').replace(/^\/admin\//, ''))}</td>
+          <td>${formatPathParams(r.path_params)}</td>
+          <td>${formatAuditBody(r.body)}</td>
+        </tr>`).join('');
+
+      const from = res.total === 0 ? 0 : auditLogFrom + 1;
+      const to   = Math.min(auditLogFrom + AUDIT_LOG_PAGE_SIZE, res.total);
+
+      const body = `
+          <table>
+            <thead><tr><th>Date / heure</th><th>Utilisateur</th><th>Méthode</th><th>Route</th><th>Cible</th><th>Détails</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune action enregistrée pour l\'instant.</td></tr>'}</tbody>
+          </table>
+          <div class="pager">
+            <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
+            <button id="audit-prev" class="secondary" ${auditLogFrom === 0 ? 'disabled' : ''}>← Précédent</button>
+            <button id="audit-next" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
+          </div>`;
+      return panelWrap('audit-log-panel', "Journal d'audit", 'actions d\'administration réussies, les plus récentes en premier', body);
+    }
+
+    function wireAuditLog() {
+      document.getElementById('audit-prev')?.addEventListener('click', () => {
+        auditLogFrom = Math.max(0, auditLogFrom - AUDIT_LOG_PAGE_SIZE);
+        refreshAuditLog();
+      });
+      document.getElementById('audit-next')?.addEventListener('click', () => {
+        auditLogFrom += AUDIT_LOG_PAGE_SIZE;
+        refreshAuditLog();
+      });
+    }
+
+    async function refreshAuditLog() {
+      const panel = document.getElementById('audit-log-panel');
+      if (panel) panel.outerHTML = await renderAuditLog();
+      wireAuditLog();
     }
 
     // ── Table des recherches ──────────────────────────────────────
@@ -132,38 +417,41 @@
       if (filters.q) params.set('q', filters.q);
 
       const res = await api(`/admin/search-logs?${params}`);
+      const feedbackLabel = { up: '👍', down: '👎' };
       const rows = res.results.map(r => `
         <tr>
           <td>${fmtDate(r.timestamp)}</td>
           <td>${r.query || ''}</td>
           <td>${Array.isArray(r.source) ? r.source.join(', ') : (r.source || '<span class="muted">toutes</span>')}</td>
+          <td>${formatCriteria(r)}</td>
           <td>${r.total_results ?? 0}</td>
           <td>${fmtResults(r.result_files)}</td>
+          <td>${feedbackLabel[r.feedback] || '<span class="muted">—</span>'}</td>
+          <td>${(r.clicks || []).length || '<span class="muted">—</span>'}</td>
         </tr>`).join('');
 
       const from = res.total === 0 ? 0 : currentFrom + 1;
       const to   = Math.min(currentFrom + PAGE_SIZE, res.total);
 
-      return `
-        <div class="panel">
-          <h2>Historique des recherches</h2>
+      const body = `
           <div class="row">
             <input type="text" id="filter-q" placeholder="Filtrer par mot-clé de la requête" value="${filters.q}" />
             <button id="apply-filters">Filtrer</button>
             <button id="reset-filters" class="secondary">Réinitialiser</button>
+            <button id="export-logs" class="secondary">⬇ Exporter en XLS</button>
           </div>
           <table>
             <thead>
-              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Résultats</th><th>Documents retournés</th></tr>
+              <tr><th>Date / heure</th><th>Requête</th><th>Source</th><th>Critères</th><th>Résultats</th><th>Documents retournés</th><th>Avis</th><th>Clics</th></tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune recherche ne correspond à ces critères.</td></tr>'}</tbody>
           </table>
           <div class="pager">
             <span class="muted">${res.total === 0 ? '0 résultat' : `${from}–${to} sur ${res.total}`}</span>
             <button id="prev-page" class="secondary" ${currentFrom === 0 ? 'disabled' : ''}>← Précédent</button>
             <button id="next-page" class="secondary" ${to >= res.total ? 'disabled' : ''}>Suivant →</button>
-          </div>
-        </div>`;
+          </div>`;
+      return panelWrap('logs-panel', 'Historique des recherches', null, body);
     }
 
     function wireLogs() {
@@ -185,19 +473,27 @@
         currentFrom += PAGE_SIZE;
         refreshLogs();
       });
+      document.getElementById('export-logs')?.addEventListener('click', () => {
+        // Reprend le filtre de mot-clé actuellement appliqué (pas la
+        // pagination — l'export couvre TOUTES les lignes correspondantes).
+        // Content-Disposition: attachment déclenche un téléchargement
+        // sans quitter la page, ouvrir un nouvel onglet suffit.
+        const params = new URLSearchParams();
+        if (filters.q) params.set('q', filters.q);
+        window.open(`/admin/search-logs/export?${params}`, '_blank');
+      });
     }
 
     async function refreshLogs() {
       const panel = document.getElementById('logs-panel');
-      const html = await renderLogs();
-      if (panel) {
-        panel.outerHTML = html.replace('<div class="panel">', '<div class="panel" id="logs-panel">');
-      }
+      if (panel) panel.outerHTML = await renderLogs();
       wireLogs();
     }
 
     async function refresh() {
-      const results = await Promise.allSettled([renderSummary(), renderLogs()]);
+      const results = await Promise.allSettled([
+        renderSummary(), renderNps(), renderSuggestions(), renderZeroResults(), renderLogs(), renderAuditLog(),
+      ]);
 
       const rejected    = results.filter(r => r.status === 'rejected').map(r => r.reason);
       const authFailure = rejected.find(e => e.status === 401 || e.status === 403);
@@ -206,14 +502,17 @@
         return;
       }
 
-      const labels = ["Vue d'ensemble", 'Historique des recherches'];
+      const labels = ["Vue d'ensemble", 'NPS', 'Suggestions', 'Recherches sans résultat', 'Historique des recherches', "Journal d'audit"];
       $app.innerHTML = results.map((r, i) =>
         r.status === 'fulfilled'
-          ? (i === 1 ? r.value.replace('<div class="panel">', '<div class="panel" id="logs-panel">') : r.value)
+          ? r.value
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`
       ).join('');
 
+      wireSuggestions();
       wireLogs();
+      wireAuditLog();
+      updateToggleAllLabel();
     }
 
     refresh();

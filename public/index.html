@@ -2,21 +2,26 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>DocSearch — Moteur de recherche documentaire</title>
+  <title>DocSearch — Explorez, trouvez, comprenez</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
+    html, body { height: 100%; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18;
+           min-height: 100vh; display: flex; flex-direction: column; }
 
     .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
-              display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
+              display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10;
+              flex-shrink: 0; }
     .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
     .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; }
-    .search-wrap input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
+    /* Combinateur d'enfant direct (>) plutôt qu'un sélecteur descendant :
+       .sources-select-panel (cases à cocher) est aussi niché dans
+       .search-wrap, plusieurs niveaux plus profond — un sélecteur
+       "input" générique les attrapait par erreur (flex:1, gros padding). */
+    .search-wrap > input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
                          border-radius: 8px; font-size: 15px; outline: none; }
-    .search-wrap input:focus { border-color: #185FA5; }
-    .scope-select { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
-                    font-size: 13px; background: #fff; color: #555; cursor: pointer; }
+    .search-wrap > input:focus { border-color: #185FA5; }
     .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: #0C447C; }
@@ -25,6 +30,25 @@
     .btn-reset:hover { background: #f5f5f3; color: #333; }
     .header-links { display: flex; gap: 16px; align-items: center; margin-left: auto; }
     .header-links a { font-size: 14px; text-decoration: none; }
+
+    /* ── Présélection de sources (avant recherche) ────────────── */
+    /* .sources-select-wrap est le flex item de .search-wrap (donc étiré
+       en hauteur par align-items: stretch, comme l'étaient input/boutons)
+       — display:flex dessus fait que le bouton À L'INTÉRIEUR suit cet
+       étirement à son tour, plutôt que de garder sa hauteur naturelle et
+       flotter mal aligné en haut de son enveloppe. */
+    .sources-select-wrap { position: relative; display: flex; flex-shrink: 0; }
+    .sources-select-toggle { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
+                              font-size: 13px; font-family: inherit; background: #fff; color: #555; cursor: pointer;
+                              white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    .sources-select-panel { display: none; position: absolute; top: 38px; left: 0; min-width: 220px;
+                             max-height: 280px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
+                             border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
+    .sources-select-panel.open { display: block; }
+    .sources-select-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+                            cursor: pointer; font-size: 13px; color: #333; }
+    .sources-select-item:hover { background: #f5f5f3; }
+    .sources-select-item input { flex-shrink: 0; }
 
     .saved-wrap { position: relative; }
     .saved-toggle { font-size: 14px; color: #185FA5; text-decoration: none; background: none;
@@ -50,12 +74,13 @@
                           align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
     .saved-item-delete:hover { background: #fff0f0; color: #c92a2a; }
 
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; width: 100%; flex: 1; }
     .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; min-height: 24px; }
     .active-filter-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
                           padding: 4px 6px 4px 12px; border-radius: 99px; background: #E6F1FB; color: #185FA5; }
     .active-filter-chip button { background: none; border: none; color: #185FA5; cursor: pointer;
                                  display: flex; padding: 2px; }
+    .active-filter-chip button svg { width: 12px; height: 12px; }
 
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
     @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
@@ -65,7 +90,11 @@
     .facet-section { margin-bottom: 18px; }
     .facet-section:last-child { margin-bottom: 0; }
     .facet-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-                   color: #888; margin-bottom: 8px; }
+                   color: #888; margin-bottom: 8px; display: flex; align-items: center;
+                   justify-content: space-between; cursor: pointer; user-select: none; }
+    .facet-caret { font-size: 9px; color: #aaa; transition: transform 0.15s; flex-shrink: 0; }
+    .facet-section.collapsed .facet-caret { transform: rotate(-90deg); }
+    .facet-section.collapsed .facet-body { display: none; }
     .facet-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 6px;
                  border-radius: 6px; cursor: pointer; font-size: 13px; color: #333; }
     .facet-row:hover { background: #f0f0ec; }
@@ -87,9 +116,15 @@
                           font-size: 13px; background: #fff; cursor: pointer; }
 
     .result-card { background: #fff; border: 1px solid #e5e5e0; border-radius: 12px; padding: 16px;
-                   margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+                   margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
     .result-card:hover { border-color: #85B7EB; box-shadow: 0 2px 8px rgba(24,95,165,0.08); }
-    .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px; }
+    .result-card.kbd-focus { border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.25); }
+    .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px;
+                     cursor: pointer; user-select: none; }
+    .result-card.collapsed .result-header { margin-bottom: 0; }
+    .result-caret { font-size: 10px; color: #aaa; flex-shrink: 0; transition: transform 0.15s; margin-top: 4px; }
+    .result-card.collapsed .result-caret { transform: rotate(-90deg); }
+    .result-card.collapsed .result-body { display: none; }
     .ext-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
                 justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
     .result-title { font-size: 15px; font-weight: 600; color: #185FA5; margin-bottom: 4px; }
@@ -103,6 +138,26 @@
                border-left: 3px solid #E6F1FB; padding-left: 12px; }
     .score-pill { font-size: 11px; color: #888; background: #f5f5f3; padding: 2px 8px;
                   border-radius: 99px; flex-shrink: 0; }
+    .result-detail-btn { font-size: 12px; color: #185FA5; background: none; border: none; cursor: pointer;
+                          padding: 0; margin-top: 8px; text-decoration: underline; font-family: inherit; }
+    .result-select-cb { margin-top: 8px; flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
+
+    /* ── Sélection de documents / collections personnelles ────── */
+    .selection-toolbar { display: none; align-items: center; gap: 14px; margin-bottom: 12px;
+                          padding: 10px 14px; background: #E6F1FB; border-radius: 10px;
+                          font-size: 13px; color: #185FA5; }
+    .selection-toolbar button { font-size: 13px; color: #185FA5; background: none; border: none;
+                                 cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+    .collection-picker-btn { display: flex; justify-content: space-between; align-items: center; width: 100%;
+                        text-align: left; padding: 8px 10px; border: 1px solid #e5e5e0; border-radius: 8px;
+                        background: #fff; cursor: pointer; font-size: 13px; color: #333; font-family: inherit; }
+    .collection-picker-btn:hover { background: #f5f5f3; }
+    .collection-doc-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
+                    border-bottom: 1px solid #f0f0ec; }
+    .collection-doc-row:last-child { border-bottom: none; }
+    .collection-doc-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                       white-space: nowrap; color: #185FA5; font-size: 13px; text-decoration: none; }
+    .collection-doc-row a:hover { text-decoration: underline; }
     .archive-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 2px 8px;
                      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: #aaa; margin-top: 4px;
@@ -124,6 +179,13 @@
     .page-btn.active { background: #185FA5; color: #fff; border-color: #185FA5; }
     .empty { text-align: center; color: #888; padding: 60px 0; }
     .empty i { font-size: 32px; display: block; margin-bottom: 10px; }
+
+    .footer { border-top: 1px solid #e5e5e0; margin-top: 32px; padding: 20px 24px 28px;
+              display: flex; align-items: center; justify-content: space-between;
+              flex-wrap: wrap; gap: 10px; font-size: 12px; color: #888; flex-shrink: 0; }
+    .footer-links { display: flex; gap: 18px; }
+    .footer-links a { color: #888; text-decoration: none; }
+    .footer-links a:hover { color: #185FA5; }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,24,0.45); display: none;
                      align-items: center; justify-content: center; z-index: 100; padding: 20px; }
@@ -147,6 +209,24 @@
                          background: #185FA5; color: #fff; border-radius: 8px; text-decoration: none;
                          font-size: 13px; margin-top: 4px; }
     .modal-preview-btn:hover { background: #0C447C; }
+
+    /* ── Pouce haut/bas (feedback par recherche) ─────────────── */
+    .feedback-bar { display: flex; align-items: center; gap: 10px; justify-content: center;
+                    margin-top: 18px; padding: 14px; background: #fff; border: 1px solid #e5e5e0;
+                    border-radius: 10px; font-size: 13px; color: #666; }
+    .feedback-btn { border: 1px solid #d5d5ce; background: #fff; border-radius: 8px; cursor: pointer;
+                    font-size: 16px; padding: 5px 12px; line-height: 1; }
+    .feedback-btn:hover:not(:disabled) { background: #f5f5f3; }
+    .feedback-btn:disabled { cursor: default; opacity: 0.5; }
+
+    /* ── NPS (popup occasionnelle) ────────────────────────────── */
+    .nps-scale { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; justify-content: center; }
+    .nps-score-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #d5d5ce;
+                     background: #fff; cursor: pointer; font-size: 13px; }
+    .nps-score-btn:hover { background: #f0f0ec; }
+    .nps-score-btn.chosen { background: #185FA5; color: #fff; border-color: #185FA5; }
+    .nps-labels { display: flex; justify-content: space-between; font-size: 11px; color: #888; }
+    .nps-thanks { text-align: center; color: #1f9254; padding: 20px 0; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -155,12 +235,11 @@
     <div class="search-wrap">
       <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
              onkeydown="if(event.key==='Enter')doSearch()" />
-      <select id="scope" class="scope-select" title="Restreindre la recherche à un champ précis">
-        <option value="all">Tout</option>
-        <option value="title">Titre</option>
-        <option value="author">Auteur</option>
-        <option value="filepath">Chemin</option>
-      </select>
+      <div class="sources-select-wrap">
+        <button type="button" class="sources-select-toggle" id="sources-select-toggle"
+                title="Restreindre la recherche à une ou plusieurs sources" onclick="toggleSourcesPanel()">Toutes les sources ▾</button>
+        <div class="sources-select-panel" id="sources-select-panel"></div>
+      </div>
       <button class="btn-primary" onclick="doSearch()">Rechercher</button>
       <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
     </div>
@@ -169,8 +248,14 @@
         <button class="saved-toggle" onclick="toggleSavedPanel()">★ Mes recherches</button>
         <div class="saved-panel" id="saved-panel"></div>
       </div>
-      <a href="/chat" style="color:#185FA5;">Assistant IA →</a>
-      <a href="/admin.html" style="color:#888;">Administration</a>
+      <div class="saved-wrap" id="collections-wrap" style="display:none;">
+        <button class="saved-toggle" onclick="toggleMyCollectionsPanel()">📋 Mes collections</button>
+        <div class="saved-panel" id="collections-panel"></div>
+      </div>
+      <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
+      <a href="/help" id="help-link" target="_blank" style="color:#185FA5;">❓ Aide</a>
+      <a href="/chat" id="chat-link" style="color:#185FA5; display:none;">Assistant IA →</a>
+      <a href="/admin.html" id="admin-link" style="color:#888; display:none;">Administration</a>
     </div>
   </header>
 
@@ -179,30 +264,40 @@
 
     <div class="layout">
       <aside class="sidebar">
-        <div class="facet-section">
-          <div class="facet-title">Type de fichier</div>
-          <div id="facet-extensions"><div class="facet-empty">Lancez une recherche</div></div>
-        </div>
-        <div class="facet-section">
-          <div class="facet-title">Période (modification)</div>
-          <div class="date-range">
-            <label for="date-from">Du</label>
-            <input type="date" id="date-from" onchange="applyDateRange()" />
-            <label for="date-to">Au</label>
-            <input type="date" id="date-to" onchange="applyDateRange()" />
+        <div class="facet-section" id="facet-section-extensions">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-extensions')">Type de fichier<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-extensions"><div class="facet-empty">Lancez une recherche</div></div>
           </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Source</div>
-          <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-period">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-period')">Période (modification)<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div class="date-range">
+              <label for="date-from">Du</label>
+              <input type="date" id="date-from" onchange="applyDateRange()" />
+              <label for="date-to">Au</label>
+              <input type="date" id="date-to" onchange="applyDateRange()" />
+            </div>
+          </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Auteur</div>
-          <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-sources">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-sources')">Source<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
         </div>
-        <div class="facet-section">
-          <div class="facet-title">Dossier</div>
-          <div id="facet-folders"><div class="facet-empty">Lancez une recherche</div></div>
+        <div class="facet-section" id="facet-section-authors">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-authors')">Auteur<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
+        </div>
+        <div class="facet-section" id="facet-section-folders">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-folders')">Dossier<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-folders"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
         </div>
         <button class="clear-link" id="clear-all" style="display:none;" onclick="clearAllFilters()">
           Effacer tous les filtres
@@ -211,9 +306,14 @@
 
       <main>
         <div class="stats-bar">
-          <span id="result-count">Entrez une recherche</span>
-          <div style="display:flex; align-items:center; gap:16px;">
+          <span id="result-count" style="display:none;"></span>
+          <div id="results-actions" style="display:none; align-items:center; gap:16px;">
             <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
+            <button class="clear-link" id="compact-view-toggle" style="margin-top:0;" onclick="toggleCompactView()">▤ Vue compacte</button>
+            <span id="export-actions" style="display:none; align-items:center; gap:16px;">
+              <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
+              <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
+            </span>
           <div class="sort-select">
             Trier par :
             <select id="sort" onchange="doSearch()">
@@ -225,14 +325,40 @@
           </div>
           </div>
         </div>
+        <div class="selection-toolbar" id="selection-toolbar">
+          <span class="selection-count"></span>
+          <button onclick="openAddToCollectionModal()">📋 Ajouter à une collection</button>
+          <button onclick="clearSelection()">Annuler la sélection</button>
+        </div>
         <div id="results"><p class="empty">Lancez une recherche pour voir les résultats.</p></div>
         <div id="pagination" class="pagination"></div>
+        <div id="feedback-bar"></div>
       </main>
     </div>
   </div>
 
+  <footer class="footer" id="page-footer">
+    <span>DocSearch — Explorez, trouvez, comprenez</span>
+    <div class="footer-links">
+      <a href="/stats.html" id="footer-stats-link" style="display:none;">Statistiques</a>
+      <a href="/admin.html" id="footer-admin-link" style="display:none;">Administration</a>
+    </div>
+  </footer>
+
   <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal-card" id="modal-card"></div>
+  </div>
+
+  <div class="modal-overlay" id="nps-overlay" onclick="if(event.target===this)closeNps()">
+    <div class="modal-card" id="nps-card" style="max-width:420px;"></div>
+  </div>
+
+  <div class="modal-overlay" id="suggestion-overlay" onclick="if(event.target===this)closeSuggestionModal()">
+    <div class="modal-card" id="suggestion-card" style="max-width:460px;"></div>
+  </div>
+
+  <div class="modal-overlay" id="collections-overlay" onclick="if(event.target===this)closeCollectionsModal()">
+    <div class="modal-card" id="collections-card" style="max-width:460px;"></div>
   </div>
 
   <script>
@@ -276,17 +402,213 @@
     }
 
     let state = {
-      // ext/author/source : sélection cumulative (plusieurs valeurs à la
-      // fois, combinées en OR côté ES), au même titre que les facettes
-      // "Source" et "Auteur" — folder reste mono-sélection. ext stocke
+      // ext/author/source/folder : sélection cumulative (plusieurs
+      // valeurs à la fois, combinées en OR côté ES). ext stocke
       // directement les valeurs brutes du champ ES (".pdf", ".docx"...),
       // identiques aux clés retournées par facets.extensions.
-      ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null,
+      ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
+      // searchId/resultIds : rattachent le pouce et le tracking de clic
+      // à LA recherche qui a produit les résultats actuellement affichés
+      // (voir renderFeedbackBar() et openDetail()).
+      searchId: null, resultIds: [],
+      // Préférence d'affichage, pas un critère de recherche — persistée en
+      // localStorage (voir loadCompactPreference), donc jamais réinitialisée
+      // par resetSearch() (comme collapsedFacets pour les facettes).
+      resultsCompact: loadCompactPreference(),
     };
+
+    // Lu une fois au chargement — dit si le pouce/le NPS/les suggestions
+    // doivent être affichés (suspendables depuis l'admin, voir
+    // /admin/engagement-config). Le tracking de clic n'a pas
+    // d'équivalent ici : toujours actif.
+    let engagementConfig = { feedback_enabled: false, nps_enabled: false, suggestions_enabled: false };
+    async function loadEngagementConfig() {
+      try {
+        engagementConfig = await api('/engagement-config');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : pouce/NPS/suggestions
+        // restent simplement masqués, la recherche elle-même n'est pas affectée.
+      }
+      document.getElementById('suggestion-link').style.display = engagementConfig.suggestions_enabled ? '' : 'none';
+    }
+
+    // Liens "Administration"/"Statistiques" : visibles seulement si
+    // l'utilisateur est admin (/is-admin) ET que le flag admin_links_enabled
+    // est actif (/ui-config) — un ET logique entre deux sources chargées
+    // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
+    // même un utilisateur autorisé ne doit plus les voir si l'admin a
+    // désactivé le flag (ex: pendant une maintenance des pages admin).
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true };
+    let isAdminCache = false;
+
+    function updateAdminLinksVisibility() {
+      const display = (isAdminCache && uiConfigCache.admin_links_enabled) ? '' : 'none';
+      document.getElementById('admin-link').style.display = display;
+      document.getElementById('footer-stats-link').style.display = display;
+      document.getElementById('footer-admin-link').style.display = display;
+    }
+
+    // Bascules d'interface sans rapport avec la satisfaction (ex:
+    // visibilité du lien "Assistant IA") — voir docsearch-api/ui_config.py.
+    async function loadUiConfig() {
+      try {
+        uiConfigCache = await api('/ui-config');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : repli sur "activé" par défaut.
+      }
+      document.getElementById('chat-link').style.display = uiConfigCache.chat_enabled ? '' : 'none';
+      document.getElementById('page-footer').style.display = uiConfigCache.footer_enabled ? '' : 'none';
+      // export-actions est imbriqué dans results-actions (masqué tant
+      // qu'aucune recherche n'est lancée) — on ne fixe ici que la
+      // visibilité liée au flag, indépendamment de l'état de la recherche.
+      document.getElementById('export-actions').style.display = uiConfigCache.export_enabled ? 'inline-flex' : 'none';
+      document.getElementById('help-link').style.display = uiConfigCache.help_enabled ? '' : 'none';
+      document.getElementById('collections-wrap').style.display = uiConfigCache.collections_enabled ? '' : 'none';
+      if (!uiConfigCache.collections_enabled) clearSelection();
+      updateAdminLinksVisibility();
+    }
+
+    // Ces pages exigent déjà elles-mêmes le groupe admin (403 sinon) —
+    // autant ne pas les proposer à un utilisateur qui n'y a pas accès.
+    // /is-admin ne lève jamais d'erreur (voir admin_auth.is_admin()),
+    // contrairement à un vrai appel /admin/*.
+    async function loadIsAdmin() {
+      try {
+        isAdminCache = (await api('/is-admin')).is_admin;
+      } catch (e) {
+        // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
+      }
+      updateAdminLinksVisibility();
+    }
+
+    // ── Accordéon des facettes (sidebar) ─────────────────────────
+    // Repli/dépli persisté en localStorage (par navigateur/poste) — un
+    // utilisateur qui replie systématiquement "Auteur" ou "Dossier" n'a
+    // pas à le refaire à chaque recherche ou rechargement de page.
+    const FACET_COLLAPSED_KEY = 'docsearch-collapsed-facets';
+
+    function loadCollapsedFacets() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(FACET_COLLAPSED_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedFacets = loadCollapsedFacets();
+
+    function applyCollapsedFacets() {
+      collapsedFacets.forEach(id => document.getElementById(id)?.classList.add('collapsed'));
+    }
+
+    function toggleFacetAccordion(id) {
+      if (collapsedFacets.has(id)) collapsedFacets.delete(id); else collapsedFacets.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedFacets.has(id));
+      try {
+        localStorage.setItem(FACET_COLLAPSED_KEY, JSON.stringify([...collapsedFacets]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+    }
 
     function toggleArrayValue(arr, value) {
       return arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
+    }
+
+    // ── Présélection de sources (avant recherche) ────────────────
+    // Complète la facette "Source" de la sidebar (qui n'apparaît qu'APRÈS
+    // une recherche, dérivée des résultats) — les deux partagent le même
+    // state.source, donc une sélection faite ici reste reflétée là-bas
+    // (et réciproquement) sans code de synchronisation supplémentaire.
+    let allSources = [];   // [{name, label, type}], chargé une fois au démarrage
+
+    // ── Sélection de documents / collections personnelles ──────────
+    // Persiste tant que l'utilisateur ne l'annule pas explicitement ou ne
+    // fait pas un resetSearch() complet — survit volontairement à un
+    // changement de page/tri/filtre (permet de composer une sélection au
+    // fil de plusieurs pages avant de l'ajouter à une collection).
+    let selectedDocs = new Set();
+    let myCollectionsCache = [];   // dernière liste de /collections chargée (panneau + modale)
+
+    function renderSelectionToolbar() {
+      const bar = document.getElementById('selection-toolbar');
+      if (!bar) return;
+      if (!uiConfigCache.collections_enabled || selectedDocs.size === 0) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = 'flex';
+      const n = selectedDocs.size;
+      bar.querySelector('.selection-count').textContent =
+        n + ' document' + (n > 1 ? 's' : '') + ' sélectionné' + (n > 1 ? 's' : '');
+    }
+
+    function toggleDocSelection(docId, checked) {
+      if (checked) selectedDocs.add(docId); else selectedDocs.delete(docId);
+      renderSelectionToolbar();
+    }
+
+    function clearSelection() {
+      selectedDocs.clear();
+      document.querySelectorAll('.result-select-cb').forEach(cb => { cb.checked = false; });
+      renderSelectionToolbar();
+    }
+
+    async function loadSearchableSources() {
+      try {
+        allSources = await api('/searchable-sources');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : la présélection reste
+        // vide, la recherche fédérée sur toutes les sources continue de
+        // fonctionner normalement.
+      }
+      updateSourcesButtonLabel();
+    }
+
+    // Libellé d'affichage d'une source à partir de son nom (clé de
+    // registre) — repli sur le nom brut si la source n'est pas (encore)
+    // dans allSources (ex: chargement de /searchable-sources en échec).
+    function sourceLabel(name) {
+      const found = allSources.find(s => s.name === name);
+      return found ? found.label : name;
+    }
+
+    function updateSourcesButtonLabel() {
+      const btn = document.getElementById('sources-select-toggle');
+      if (!btn) return;
+      let label;
+      if (!state.source.length) label = 'Toutes les sources';
+      else if (state.source.length === 1) label = sourceLabel(state.source[0]);
+      else label = `${state.source.length} sources`;
+      btn.textContent = label + ' ▾';
+    }
+
+    function renderSourcesPanel() {
+      const panel = document.getElementById('sources-select-panel');
+      if (!allSources.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune source disponible</div>';
+        return;
+      }
+      panel.innerHTML = allSources.map(s => `
+        <label class="sources-select-item">
+          <input type="checkbox" data-source="${escapeHtml(s.name)}" ${state.source.includes(s.name) ? 'checked' : ''} />
+          ${escapeHtml(s.label)}
+        </label>`).join('');
+      panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          state.source = toggleArrayValue(state.source, cb.dataset.source);
+          updateSourcesButtonLabel();
+        });
+      });
+    }
+
+    function toggleSourcesPanel() {
+      const panel = document.getElementById('sources-select-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+      renderSourcesPanel();
+      panel.classList.add('open');
     }
 
     // Icônes en SVG inline plutôt qu'une police d'icônes (aucune n'est
@@ -297,6 +619,7 @@
     const ICON_FOLDER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h5l2 3h9a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-13a1 1 0 0 1 1 -1"/></svg>';
     const ICON_COPY   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8v-3a1 1 0 0 0 -1 -1h-9a1 1 0 0 0 -1 1v9a1 1 0 0 0 1 1h3"/></svg>';
     const ICON_CHECK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg>';
+    const ICON_X      = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
 
     function fmtSize(bytes) {
       if (!bytes) return '—';
@@ -320,15 +643,11 @@
       return res.json();
     }
 
-    async function doSearch() {
-      const q = document.getElementById('q').value.trim();
-      if (!q) return;
-      state.sort = document.getElementById('sort').value;
-
-      const body = {
+    // Critères communs à /search et /search/export (pagination exclue —
+    // chacun des deux appelants fixe from/size selon son propre besoin).
+    function buildSearchCriteria(q) {
+      return {
         query: q,
-        size: PER_PAGE,
-        from: (state.page - 1) * PER_PAGE,
         sort: state.sort,
         extension: state.ext.length ? state.ext : null,
         author: state.author,
@@ -336,23 +655,264 @@
         source: state.source,
         date_from: state.dateFrom,
         date_to: state.dateTo,
-        search_in: document.getElementById('scope').value,
+      };
+    }
+
+    // ── Syntaxe avancée de recherche ────────────────────────────
+    // "auteur:", "type:", "source:", "dossier:" (+ alias anglais) dans la
+    // barre de recherche — convertis en filtres cumulatifs (state.author/
+    // ext/source/folder), EXACTEMENT comme un clic sur la facette
+    // correspondante : même mécanisme de sélection cumulative, mêmes
+    // puces retirables, même correspondance EXACTE (pas de recherche
+    // floue — la valeur doit correspondre à ce qu'affiche la facette,
+    // ex: copier-coller le nom d'auteur depuis la liste "Auteur").
+    // Valeur sur un seul mot (auteur:dupont) ou entre guillemets pour les
+    // espaces (auteur:"Jean Dupont"). Un opérateur non reconnu (ex:
+    // "foo:bar") est laissé tel quel dans le texte libre plutôt que
+    // silencieusement supprimé.
+    const ADVANCED_QUERY_OPERATORS = {
+      auteur: 'author', author: 'author',
+      type: 'ext', ext: 'ext', extension: 'ext',
+      source: 'source',
+      dossier: 'folder', folder: 'folder',
+    };
+    const ADVANCED_QUERY_RE = /\b([a-zA-Z]+):(?:"([^"]*)"|(\S+))/g;
+
+    function parseAdvancedQuery(text) {
+      const extracted = { author: [], ext: [], source: [], folder: [] };
+      const remaining = text.replace(ADVANCED_QUERY_RE, (match, key, quoted, bare) => {
+        const dim = ADVANCED_QUERY_OPERATORS[key.toLowerCase()];
+        if (!dim) return match;
+        let value = (quoted !== undefined ? quoted : bare).trim();
+        if (!value) return match;
+        if (dim === 'ext') value = (value.startsWith('.') ? value : '.' + value).toLowerCase();
+        extracted[dim].push(value);
+        return '';
+      }).replace(/\s+/g, ' ').trim();
+      return { remaining, extracted };
+    }
+
+    // Vrai s'il y a quelque chose à chercher : texte libre, ou au moins
+    // un filtre actif (facette cliquée ou extraite de la syntaxe avancée,
+    // ou période) — une recherche à critères tous vides ne part jamais.
+    function hasActiveCriteria(q) {
+      return !!q || state.ext.length || state.author.length || state.folder.length ||
+             state.source.length || state.dateFrom || state.dateTo;
+    }
+
+    async function doSearch() {
+      const rawQ = document.getElementById('q').value.trim();
+      const { remaining, extracted } = parseAdvancedQuery(rawQ);
+      extracted.author.forEach(v => { if (!state.author.includes(v)) state.author.push(v); });
+      extracted.ext.forEach(v    => { if (!state.ext.includes(v))    state.ext.push(v); });
+      extracted.source.forEach(v => { if (!state.source.includes(v)) state.source.push(v); });
+      extracted.folder.forEach(v => { if (!state.folder.includes(v)) state.folder.push(v); });
+      // La barre ne garde que le texte libre restant — les opérateurs
+      // reconnus deviennent des puces de filtre (voir renderActiveFilters),
+      // seule source de vérité ensuite (les retirer via leur puce ✕ ne
+      // doit pas les faire réapparaître au prochain Entrée).
+      if (remaining !== rawQ) document.getElementById('q').value = remaining;
+
+      const q = remaining;
+      if (!hasActiveCriteria(q)) return;
+      state.sort = document.getElementById('sort').value;
+
+      const body = {
+        ...buildSearchCriteria(q),
+        size: PER_PAGE,
+        from: (state.page - 1) * PER_PAGE,
       };
 
       const box = document.getElementById('results');
       try {
         const data = await api('/search', { method: 'POST', body: JSON.stringify(body) });
+        state.searchId   = data.search_id || null;
+        state.resultIds  = data.results.map(r => r.id);
         renderResults(data, q);
         renderFacets(data.facets);
         renderActiveFilters();
+        renderFeedbackBar();
+        maybeShowNps();
       } catch (e) {
         box.innerHTML = `<p class="empty">Impossible de contacter l'API : ${e.message}</p>`;
       }
     }
 
+    // ── Export des résultats (XLSX / DOCX) ──────────────────────
+    // POST (pas GET comme /admin/search-logs/export) : les critères de
+    // recherche peuvent dépasser la taille raisonnable d'une query
+    // string. fetch + blob plutôt que window.open(), qui ne sait faire
+    // qu'un GET.
+    async function exportResults(format) {
+      const q = document.getElementById('q').value.trim();
+      if (!hasActiveCriteria(q)) return;
+      const body = { ...buildSearchCriteria(q), format };
+      try {
+        const res = await fetch('/search/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.detail || `Erreur ${res.status}`);
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : `resultats.${format}`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert("Impossible d'exporter les résultats : " + e.message);
+      }
+    }
+
+    // ── Pouce haut/bas ───────────────────────────────────────────
+    function renderFeedbackBar() {
+      const wrap = document.getElementById('feedback-bar');
+      if (!engagementConfig.feedback_enabled || !state.searchId) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = `
+        <div class="feedback-bar">
+          <span>Cette recherche vous a-t-elle été utile ?</span>
+          <button class="feedback-btn" data-rating="up" aria-label="Oui">👍</button>
+          <button class="feedback-btn" data-rating="down" aria-label="Non">👎</button>
+        </div>`;
+      wrap.querySelectorAll('.feedback-btn').forEach(btn => {
+        btn.addEventListener('click', () => submitFeedback(btn.dataset.rating));
+      });
+    }
+
+    async function submitFeedback(rating) {
+      const wrap = document.getElementById('feedback-bar');
+      const searchId = state.searchId;   // fige la valeur : une recherche suivante ne doit pas changer la cible
+      wrap.querySelectorAll('.feedback-btn').forEach(b => b.disabled = true);
+      try {
+        await api('/feedback', { method: 'POST', body: JSON.stringify({ search_id: searchId, rating }) });
+        wrap.innerHTML = '<div class="feedback-bar"><span>Merci pour votre retour !</span></div>';
+      } catch (e) {
+        wrap.querySelectorAll('.feedback-btn').forEach(b => b.disabled = false);
+        alert("Impossible d'enregistrer votre avis : " + e.message);
+      }
+    }
+
+    // ── Tracking de clic (toujours actif, pas de flag) ──────────
+    function trackClick(docId) {
+      if (!state.searchId) return;
+      const position = state.resultIds.indexOf(docId);
+      // Fire-and-forget : ne doit jamais retarder ni bloquer l'ouverture
+      // du détail du document pour l'utilisateur.
+      api('/click', {
+        method: 'POST',
+        body: JSON.stringify({ search_id: state.searchId, doc_id: docId, position }),
+      }).catch(() => {});
+    }
+
+    // ── NPS (popup occasionnelle) ────────────────────────────────
+    const NPS_EVERY_N_SEARCHES = 20;
+    const NPS_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;   // 30 jours
+
+    function maybeShowNps() {
+      if (!engagementConfig.nps_enabled) return;
+      const count = parseInt(localStorage.getItem('docsearch-search-count') || '0', 10) + 1;
+      localStorage.setItem('docsearch-search-count', String(count));
+      if (count % NPS_EVERY_N_SEARCHES !== 0) return;
+
+      const lastShown = parseInt(localStorage.getItem('docsearch-nps-last-shown') || '0', 10);
+      if (Date.now() - lastShown < NPS_COOLDOWN_MS) return;
+
+      showNpsModal();
+    }
+
+    function showNpsModal() {
+      localStorage.setItem('docsearch-nps-last-shown', String(Date.now()));
+      const card = document.getElementById('nps-card');
+      const scores = Array.from({ length: 11 }, (_, i) => i);
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeNps()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:6px;">Une question rapide</p>
+        <p style="font-size:13px;color:#666;">Sur une échelle de 0 à 10, recommanderiez-vous DocSearch à un collègue ?</p>
+        <div class="nps-scale">${scores.map(s => `<button class="nps-score-btn" data-score="${s}">${s}</button>`).join('')}</div>
+        <div class="nps-labels"><span>Pas du tout probable</span><span>Très probable</span></div>`;
+      document.getElementById('nps-overlay').classList.add('open');
+      card.querySelectorAll('.nps-score-btn').forEach(btn => {
+        btn.addEventListener('click', () => submitNps(parseInt(btn.dataset.score, 10)));
+      });
+    }
+
+    async function submitNps(score) {
+      const card = document.getElementById('nps-card');
+      try {
+        await api('/nps', { method: 'POST', body: JSON.stringify({ score }) });
+      } catch (e) {
+        // Échec silencieux : ne pas transformer un simple remerciement en erreur visible.
+      }
+      card.innerHTML = '<div class="nps-thanks">Merci pour votre retour !</div>';
+      setTimeout(closeNps, 1500);
+    }
+
+    function closeNps() {
+      document.getElementById('nps-overlay').classList.remove('open');
+    }
+
+    // ── Suggestions libres ───────────────────────────────────────
+    // Anonyme par défaut (case décochée) — cocher "Ne pas rester anonyme"
+    // envoie l'identité (résolue côté API via X-User, voir search_api.py).
+    function openSuggestionModal() {
+      const card = document.getElementById('suggestion-card');
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:6px;">💡 Suggérer une idée</p>
+        <p style="font-size:13px;color:#666;margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
+        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;margin-bottom:10px;">
+          <option value="idea">Idée / amélioration</option>
+          <option value="bug">Bug</option>
+          <option value="other">Autre</option>
+        </select>
+        <textarea id="suggestion-text" rows="5" placeholder="Votre suggestion…"
+                  style="width:100%;padding:10px;border:1px solid #d5d5ce;border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#333;cursor:pointer;">
+          <input type="checkbox" id="suggestion-not-anonymous" />
+          Ne pas rester anonyme (associer mon identité à cette suggestion)
+        </label>
+        <button class="btn-primary" style="margin-top:12px;width:100%;" onclick="submitSuggestion()">Envoyer</button>`;
+      document.getElementById('suggestion-overlay').classList.add('open');
+      document.getElementById('suggestion-text').focus();
+    }
+
+    async function submitSuggestion() {
+      const text = document.getElementById('suggestion-text').value.trim();
+      if (!text) { alert('Le champ ne peut pas être vide.'); return; }
+      const category = document.getElementById('suggestion-category').value;
+      const anonymous = !document.getElementById('suggestion-not-anonymous').checked;
+      const card = document.getElementById('suggestion-card');
+      try {
+        await api('/suggestions', { method: 'POST', body: JSON.stringify({ text, category, anonymous }) });
+        card.innerHTML = '<div class="nps-thanks">Merci pour votre suggestion !</div>';
+        setTimeout(closeSuggestionModal, 1500);
+      } catch (e) {
+        alert("Impossible d'envoyer votre suggestion : " + e.message);
+      }
+    }
+
+    function closeSuggestionModal() {
+      document.getElementById('suggestion-overlay').classList.remove('open');
+    }
+
     function renderResults(data, q) {
       const box = document.getElementById('results');
-      document.getElementById('result-count').textContent =
+      focusedResultIndex = -1;   // les cartes précédentes n'existent plus après ce rendu
+      const resultCount = document.getElementById('result-count');
+      resultCount.style.display = '';
+      document.getElementById('results-actions').style.display = 'flex';
+      resultCount.textContent =
         data.total.toLocaleString('fr-FR') + ' résultat' + (data.total > 1 ? 's' : '') +
         (q ? ` pour « ${q} »` : '');
 
@@ -372,47 +932,102 @@
           : '';
         const sourceNote = r.source
           ? (() => {
+              // Couleur dérivée du nom brut (stable même si le libellé change),
+              // mais texte et initiale affichés basés sur le libellé.
               const sc = sourceColor(r.source);
-              return `<span class="source-badge" title="Source : ${escapeHtml(r.source)}">
-                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(r.source.charAt(0).toUpperCase())}</span>
-                ${escapeHtml(r.source)}
+              const label = sourceLabel(r.source);
+              return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
+                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+                ${escapeHtml(label)}
               </span>`;
             })()
           : '';
+        // Décalage du corps (métadonnées/chemin/extrait) pour rester aligné
+        // sous le titre — dépend de si la case de sélection précède l'icône.
+        const bodyIndent = uiConfigCache.collections_enabled ? 75 : 48;
         return `
-        <div class="result-card" onclick="openDetail('${r.id}')">
-          <div class="result-header">
+        <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
+          <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
+            ${uiConfigCache.collections_enabled ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+                     onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
+                     aria-label="Sélectionner ce document" />` : ''}
             <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
             <div style="flex:1;min-width:0;">
               <div class="result-title">${r.title || r.filename}</div>
-              <div class="result-meta">
-                ${sourceNote}
-                ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-                <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
-                ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
-                <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
-                ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
-                ${archiveNote}
-              </div>
-              ${r.filepath ? `
-                <div class="result-path" title="${escapeHtml(r.filepath)}">
-                  <i class="ti ti-route" aria-hidden="true"></i>
-                  <span class="path-text">${r.filepath}</span>
-                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
-                          onclick="event.stopPropagation(); copyPathClick(event);"
-                          title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
-                  <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
-                          onclick="event.stopPropagation(); copyPathClick(event);"
-                          title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
-                </div>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
+            <span class="result-caret">▾</span>
           </div>
-          ${snippets ? `<div class="snippet">${snippets}</div>` : ''}
+          <div class="result-body">
+            <div class="result-meta" style="margin-left:${bodyIndent}px;">
+              ${sourceNote}
+              ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
+              <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
+              ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
+              <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
+              ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
+              ${archiveNote}
+            </div>
+            ${r.filepath ? `
+              <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
+                <i class="ti ti-route" aria-hidden="true"></i>
+                <span class="path-text">${r.filepath}</span>
+                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
+                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
+              </div>` : ''}
+            ${snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
+            <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
+          </div>
         </div>`;
       }).join('');
 
       renderPagination(data.total);
+      renderSelectionToolbar();
+    }
+
+    // Accordéon des résultats — l'en-tête (icône/titre/score) reste
+    // toujours visible, le corps (métadonnées, chemin, extrait) se
+    // déplie/replie individuellement. Indépendant de state.resultsCompact
+    // (qui fixe seulement l'état INITIAL au rendu, voir toggleCompactView).
+    function toggleResultAccordion(card) {
+      card?.classList.toggle('collapsed');
+    }
+
+    // ── Vue compacte (ensemble de la liste) ──────────────────────
+    const COMPACT_RESULTS_KEY = 'docsearch-compact-results';
+
+    function loadCompactPreference() {
+      try {
+        return localStorage.getItem(COMPACT_RESULTS_KEY) === '1';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function updateCompactToggleLabel() {
+      const btn = document.getElementById('compact-view-toggle');
+      if (btn) btn.textContent = state.resultsCompact ? '▥ Vue détaillée' : '▤ Vue compacte';
+    }
+
+    function toggleCompactView() {
+      state.resultsCompact = !state.resultsCompact;
+      try {
+        localStorage.setItem(COMPACT_RESULTS_KEY, state.resultsCompact ? '1' : '0');
+      } catch (e) {
+        // localStorage indisponible : la préférence reste active pour cette session, simplement pas persistée.
+      }
+      updateCompactToggleLabel();
+      // Applique le nouveau mode à TOUS les résultats actuellement affichés,
+      // en écrasant tout dépli/repli individuel fait entre-temps — un
+      // bouton "vue d'ensemble" doit donner une vue uniforme, pas
+      // composer avec l'état précédent carte par carte.
+      document.querySelectorAll('#results .result-card').forEach(card => {
+        card.classList.toggle('collapsed', state.resultsCompact);
+      });
     }
 
     function renderPagination(total) {
@@ -422,9 +1037,9 @@
       const range = [];
       for (let i = Math.max(1, state.page - 2); i <= Math.min(pages, state.page + 2); i++) range.push(i);
       pag.innerHTML =
-        (state.page > 1 ? `<div class="page-btn" onclick="goPage(${state.page - 1})">←</div>` : '') +
+        (state.page > 1 ? `<div class="page-btn page-prev" onclick="goPage(${state.page - 1})">←</div>` : '') +
         range.map(i => `<div class="page-btn${i === state.page ? ' active' : ''}" onclick="goPage(${i})">${i}</div>`).join('') +
-        (state.page < pages ? `<div class="page-btn" onclick="goPage(${state.page + 1})">→</div>` : '');
+        (state.page < pages ? `<div class="page-btn page-next" onclick="goPage(${state.page + 1})">→</div>` : '');
     }
 
     function goPage(n) { state.page = n; doSearch(); }
@@ -455,6 +1070,15 @@
       const outer = filepath.split('::')[0];
       const idx = Math.max(outer.lastIndexOf('/'), outer.lastIndexOf('\\'));
       return idx >= 0 ? outer.slice(0, idx) : outer;
+    }
+
+    // Dernier segment d'un chemin de dossier — la facette "Dossier" garde
+    // le chemin complet en valeur/tooltip (title), mais n'affiche que ce
+    // segment pour rester lisible dans la largeur étroite de la sidebar.
+    function folderBasename(path) {
+      const trimmed = path.replace(/[/\\]+$/, '');
+      const idx = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+      return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
     }
 
     async function copyPathClick(e) {
@@ -492,7 +1116,7 @@
       const sourcesBox = document.getElementById('facet-sources');
       sourcesBox.innerHTML = (facets.sources || []).filter(f => f.key).map(f => `
         <div class="facet-row${state.source.includes(f.key) ? ' active' : ''}" data-facet-type="source" data-facet-value="${escapeHtml(f.key)}">
-          <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+          <span>${escapeHtml(sourceLabel(f.key))}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucune source</div>';
 
       const authorsBox = document.getElementById('facet-authors');
@@ -503,8 +1127,8 @@
 
       const foldersBox = document.getElementById('facet-folders');
       foldersBox.innerHTML = (facets.folders || []).filter(f => f.key).map(f => `
-        <div class="facet-row${state.folder === f.key ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}">
-          <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+        <div class="facet-row${state.folder.includes(f.key) ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}" title="${escapeHtml(f.key)}">
+          <span>${escapeHtml(folderBasename(f.key))}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun dossier</div>';
 
       // Gestionnaires attachés après le rendu plutôt qu'un onclick
@@ -521,7 +1145,7 @@
       if (type === 'ext') state.ext = toggleArrayValue(state.ext, value);
       if (type === 'source') state.source = toggleArrayValue(state.source, value);
       if (type === 'author') state.author = toggleArrayValue(state.author, value);
-      if (type === 'folder') state.folder = (state.folder === value) ? null : value;
+      if (type === 'folder') state.folder = toggleArrayValue(state.folder, value);
       state.page = 1;
       doSearch();
     }
@@ -541,7 +1165,7 @@
       state.ext.forEach(e => chips.push({ label: 'Type : ' + extLabel(e), clear: () => { state.ext = state.ext.filter(v => v !== e); } }));
       state.source.forEach(s => chips.push({ label: 'Source : ' + s, clear: () => { state.source = state.source.filter(v => v !== s); } }));
       state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
-      if (state.folder) chips.push({ label: 'Dossier : ' + state.folder, clear: () => { state.folder = null; } });
+      state.folder.forEach(f => chips.push({ label: 'Dossier : ' + f, clear: () => { state.folder = state.folder.filter(v => v !== f); } }));
       if (state.dateFrom || state.dateTo) chips.push({
         label: 'Période : ' + (state.dateFrom || '…') + ' → ' + (state.dateTo || '…'),
         clear: () => {
@@ -551,10 +1175,11 @@
         }
       });
       wrap.innerHTML = chips.map((c, i) =>
-        `<span class="active-filter-chip">${c.label}<button onclick="clearFilterAt(${i})" aria-label="Retirer ce filtre"><i class="ti ti-x" aria-hidden="true" style="font-size:12px;"></i></button></span>`
+        `<span class="active-filter-chip">${c.label}<button onclick="clearFilterAt(${i})" aria-label="Retirer ce filtre">${ICON_X}</button></span>`
       ).join('');
       window.__clearFns = chips.map(c => c.clear);
       document.getElementById('clear-all').style.display = chips.length ? 'inline-block' : 'none';
+      updateSourcesButtonLabel();
     }
 
     function clearFilterAt(i) {
@@ -564,7 +1189,7 @@
     }
 
     function clearAllFilters() {
-      state.ext = []; state.author = []; state.folder = null; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.ext = []; state.author = []; state.folder = []; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -573,38 +1198,42 @@
     function resetSearch() {
       // Remise à zéro complète — contrairement à clearAllFilters() (qui
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
-      // elle-même, le tri, le champ ciblé, et ramène l'affichage à
-      // l'état initial (aucune recherche lancée).
-      state = { ext: [], author: [], folder: null, source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1 };
+      // elle-même et le tri, et ramène l'affichage à l'état initial
+      // (aucune recherche lancée).
+      state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
+      clearSelection();
 
       document.getElementById('q').value = '';
-      document.getElementById('scope').value = 'all';
       document.getElementById('sort').value = '_score';
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
 
-      document.getElementById('result-count').textContent = 'Entrez une recherche';
+      const resultCount = document.getElementById('result-count');
+      resultCount.textContent = '';
+      resultCount.style.display = 'none';
+      document.getElementById('results-actions').style.display = 'none';
       document.getElementById('results').innerHTML = '<p class="empty">Lancez une recherche pour voir les résultats.</p>';
       document.getElementById('pagination').innerHTML = '';
+      document.getElementById('feedback-bar').innerHTML = '';
       document.getElementById('active-filters').innerHTML = '';
       document.getElementById('facet-extensions').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-sources').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('clear-all').style.display = 'none';
+      updateSourcesButtonLabel();
     }
 
     // ── Recherches sauvegardées ─────────────────────────────────
     async function saveCurrentSearch() {
       const q = document.getElementById('q').value.trim();
-      if (!q) { alert("Lancez une recherche avant de l'enregistrer."); return; }
-      const name = prompt('Nom de cette recherche :', q);
+      if (!hasActiveCriteria(q)) { alert("Lancez une recherche avant de l'enregistrer."); return; }
+      const name = prompt('Nom de cette recherche :', q || 'Recherche sans titre');
       if (!name || !name.trim()) return;
 
       const body = {
         name,
         query:     q,
-        search_in: document.getElementById('scope').value,
         ext:       state.ext,
         author:    state.author,
         folder:    state.folder,
@@ -654,7 +1283,8 @@
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       const authorLabel = multiLabel(s.author);
       if (authorLabel) tags.push('Auteur : ' + authorLabel);
-      if (s.folder) tags.push('Dossier : ' + s.folder);
+      const folderLabel = multiLabel(s.folder);
+      if (folderLabel) tags.push('Dossier : ' + folderLabel);
       const sourceLabel = multiLabel(s.source);
       if (sourceLabel) tags.push('Source : ' + sourceLabel);
       if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
@@ -711,14 +1341,13 @@
       // recherches) — 'all' redevient un tableau vide (pas de filtre).
       const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
       state = {
-        ext: extList, author: toArray(s.author), folder: s.folder || null,
+        ext: extList, author: toArray(s.author), folder: toArray(s.folder),
         source: toArray(s.source),
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
       };
 
       document.getElementById('q').value = s.query;
-      document.getElementById('scope').value = s.search_in || 'all';
       document.getElementById('sort').value = state.sort;
       document.getElementById('date-from').value = state.dateFrom || '';
       document.getElementById('date-to').value = state.dateTo || '';
@@ -727,14 +1356,192 @@
       doSearch();
     }
 
+    // ── Collections de documents ("📋 Mes collections") ─────────────────
+    // Panneau déroulant (comme "★ Mes recherches") listant les collections de
+    // l'utilisateur ; la modale #collections-overlay est réutilisée pour deux
+    // usages distincts et mutuellement exclusifs : consulter le contenu
+    // d'une collection (viewCollection) ou choisir/créer la collection où ajouter la
+    // sélection courante (openAddToCollectionModal).
+    async function toggleMyCollectionsPanel() {
+      const panel = document.getElementById('collections-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+
+      panel.classList.add('open');
+      panel.innerHTML = '<div class="saved-empty">Chargement…</div>';
+      try {
+        myCollectionsCache = await api('/collections');
+        renderMyCollectionsPanel();
+      } catch (e) {
+        panel.innerHTML = `<div class="saved-empty">${e.message}</div>`;
+      }
+    }
+
+    function renderMyCollectionsPanel() {
+      const panel = document.getElementById('collections-panel');
+      if (!myCollectionsCache.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune collection pour l’instant.</div>';
+        return;
+      }
+      panel.innerHTML = myCollectionsCache.map(l => `
+        <div class="saved-item" data-collection-id="${l.id}">
+          <div class="saved-item-main">
+            <div class="saved-item-name">${escapeHtml(l.name)}</div>
+            <div class="saved-item-query">${l.doc_ids.length} document${l.doc_ids.length > 1 ? 's' : ''}</div>
+          </div>
+          <button class="saved-item-delete" title="Supprimer la collection" aria-label="Supprimer la collection">✕</button>
+        </div>`).join('');
+
+      panel.querySelectorAll('.saved-item').forEach(row => {
+        const id = row.dataset.collectionId;
+        row.querySelector('.saved-item-main').addEventListener('click', () => viewCollection(id));
+        row.querySelector('.saved-item-delete').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const entry = myCollectionsCache.find(l => l.id === id);
+          if (!confirm(`Supprimer la collection « ${entry.name} » ? Les documents eux-mêmes ne sont pas supprimés.`)) return;
+          try {
+            myCollectionsCache = await api(`/collections/${id}`, { method: 'DELETE' });
+            renderMyCollectionsPanel();
+          } catch (err) {
+            alert('Impossible de supprimer : ' + err.message);
+          }
+        });
+      });
+    }
+
+    // Affiche le contenu d'une collection dans la modale — chaque document est
+    // relu via /document/{id} (pas un simple mget ES) pour que la
+    // vérification ACL déjà faite par cet endpoint s'applique aussi ici :
+    // un document devenu inaccessible entre-temps n'est jamais exposé.
+    async function viewCollection(collectionId) {
+      document.getElementById('collections-panel').classList.remove('open');
+      const overlay = document.getElementById('collections-overlay');
+      const card = document.getElementById('collections-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      overlay.classList.add('open');
+
+      const collection = myCollectionsCache.find(l => l.id === collectionId);
+      if (!collection) { card.innerHTML = '<p>Collection introuvable.</p>'; return; }
+
+      if (!collection.doc_ids.length) {
+        card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+          <p style="font-weight:600;font-size:15px;margin-bottom:12px;">${escapeHtml(collection.name)}</p>
+          <p class="muted" style="font-size:13px;color:#888;">Collection vide.</p>`;
+        return;
+      }
+
+      const results = await Promise.allSettled(collection.doc_ids.map(id => api('/document/' + id)));
+      const rows = results.map((r, i) => {
+        const docId = collection.doc_ids[i];
+        const inner = r.status === 'fulfilled'
+          ? `<a href="#" onclick="closeCollectionsModal(); openDetail('${docId}'); return false;">${escapeHtml(r.value.title || r.value.filename)}</a>`
+          : `<span style="flex:1;font-size:13px;color:#c92a2a;">Document indisponible</span>`;
+        return `<div class="collection-doc-row">
+          ${inner}
+          <button class="copy-icon-btn" title="Retirer de la collection" aria-label="Retirer de la collection" onclick="removeFromCollection('${collectionId}', '${docId}')">${ICON_X}</button>
+        </div>`;
+      }).join('');
+
+      card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:12px;">${escapeHtml(collection.name)}</p>
+        <div style="max-height:340px;overflow-y:auto;">${rows}</div>`;
+    }
+
+    async function removeFromCollection(collectionId, docId) {
+      try {
+        myCollectionsCache = await api(`/collections/${collectionId}/documents/${docId}`, { method: 'DELETE' });
+        viewCollection(collectionId);
+      } catch (e) {
+        alert('Erreur : ' + e.message);
+      }
+    }
+
+    async function openAddToCollectionModal() {
+      if (!selectedDocs.size) return;
+      const overlay = document.getElementById('collections-overlay');
+      const card = document.getElementById('collections-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      overlay.classList.add('open');
+      try {
+        myCollectionsCache = await api('/collections');
+        renderAddToCollectionModal();
+      } catch (e) {
+        card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+      }
+    }
+
+    function renderAddToCollectionModal() {
+      const card = document.getElementById('collections-card');
+      const n = selectedDocs.size;
+      card.innerHTML = `
+        <button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+        <p style="font-weight:600;font-size:15px;margin-bottom:12px;">📋 Ajouter ${n} document${n > 1 ? 's' : ''} à une collection</p>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px;">
+          ${myCollectionsCache.map(l => `
+            <button class="collection-picker-btn" data-collection-id="${l.id}">
+              <span>${escapeHtml(l.name)}</span><span style="color:#888;">${l.doc_ids.length}</span>
+            </button>`).join('') || '<p class="muted" style="font-size:13px;color:#888;">Aucune collection pour l’instant.</p>'}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="new-collection-name" placeholder="Nouvelle collection…"
+                 style="flex:1;padding:8px 10px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;" />
+          <button class="btn-primary" id="create-collection-btn">Créer</button>
+        </div>`;
+      card.querySelectorAll('[data-collection-id]').forEach(btn => {
+        btn.addEventListener('click', () => addSelectedDocsToCollection(btn.dataset.collectionId));
+      });
+      document.getElementById('create-collection-btn').addEventListener('click', createCollectionAndAdd);
+      document.getElementById('new-collection-name').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') createCollectionAndAdd();
+      });
+    }
+
+    async function createCollectionAndAdd() {
+      const name = document.getElementById('new-collection-name').value.trim();
+      if (!name) { alert('Le nom de la collection ne peut pas être vide.'); return; }
+      try {
+        const newCollection = await api('/collections', { method: 'POST', body: JSON.stringify({ name }) });
+        await addSelectedDocsToCollection(newCollection.id);
+      } catch (e) {
+        alert('Erreur : ' + e.message);
+      }
+    }
+
+    async function addSelectedDocsToCollection(collectionId) {
+      const card = document.getElementById('collections-card');
+      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Ajout en cours…</p>';
+      try {
+        for (const docId of selectedDocs) {
+          await api(`/collections/${collectionId}/documents`, { method: 'POST', body: JSON.stringify({ doc_id: docId }) });
+        }
+        card.innerHTML = '<div class="nps-thanks">Ajouté !</div>';
+        clearSelection();
+        setTimeout(closeCollectionsModal, 1200);
+      } catch (e) {
+        card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+      }
+    }
+
+    function closeCollectionsModal() {
+      document.getElementById('collections-overlay').classList.remove('open');
+    }
+
     document.addEventListener('click', (e) => {
-      const wrap = document.querySelector('.saved-wrap');
-      if (wrap && !wrap.contains(e.target)) {
-        document.getElementById('saved-panel').classList.remove('open');
+      document.querySelectorAll('.saved-wrap').forEach(wrap => {
+        if (!wrap.contains(e.target)) {
+          wrap.querySelector('.saved-panel')?.classList.remove('open');
+        }
+      });
+      const sourcesWrap = document.querySelector('.sources-select-wrap');
+      if (sourcesWrap && !sourcesWrap.contains(e.target)) {
+        document.getElementById('sources-select-panel').classList.remove('open');
       }
     });
 
     async function openDetail(id) {
+      trackClick(id);
       const overlay = document.getElementById('modal-overlay');
       const card = document.getElementById('modal-card');
       card.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">Chargement…</p>';
@@ -784,7 +1591,19 @@
           <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
-          <div class="modal-row"><span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span><span class="v">${doc.folder || '—'}</span></div>
+          <div class="modal-row">
+            <span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span>
+            <span class="v" style="display:inline-flex;align-items:center;gap:2px;">
+              ${doc.folder || '—'}
+              ${doc.filepath ? `
+                <button class="copy-icon-btn" data-path="${escapeHtml(doc.filepath)}" data-copy="dir"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
+                <button class="copy-icon-btn" data-path="${escapeHtml(doc.filepath)}" data-copy="full"
+                        onclick="copyPathClick(event);"
+                        title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>` : ''}
+            </span>
+          </div>
           <div class="modal-row"><span class="k"><i class="ti ti-file" aria-hidden="true"></i>Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
           ${isArchiveMember ? `<div class="modal-row"><span class="k"><i class="ti ti-file-zip" aria-hidden="true"></i>Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
         </div>
@@ -802,7 +1621,109 @@
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    // ── Raccourcis clavier ────────────────────────────────────────
+    // Focus courant sur la liste de résultats, pour ↑/↓/Entrée — remis à
+    // -1 à chaque nouveau rendu (renderResults), les cartes précédentes
+    // n'existant plus dans le DOM.
+    let focusedResultIndex = -1;
+
+    function getResultCards() {
+      return Array.from(document.querySelectorAll('#results .result-card'));
+    }
+
+    function setFocusedResult(index) {
+      const cards = getResultCards();
+      if (!cards.length) return;
+      cards.forEach(c => c.classList.remove('kbd-focus'));
+      focusedResultIndex = Math.max(0, Math.min(index, cards.length - 1));
+      const card = cards[focusedResultIndex];
+      card.classList.add('kbd-focus');
+      card.scrollIntoView({ block: 'nearest' });
+    }
+
+    function isTypingTarget(el) {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
+    function anyOverlayOpen() {
+      return document.getElementById('modal-overlay').classList.contains('open')
+          || document.getElementById('nps-overlay').classList.contains('open')
+          || document.getElementById('suggestion-overlay').classList.contains('open')
+          || document.getElementById('collections-overlay').classList.contains('open');
+    }
+
+    function closeAnyOpenPanel() {
+      closeModal();
+      closeNps();
+      closeSuggestionModal();
+      closeCollectionsModal();
+      document.getElementById('saved-panel').classList.remove('open');
+      document.getElementById('collections-panel').classList.remove('open');
+      document.getElementById('sources-select-panel').classList.remove('open');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeAnyOpenPanel(); return; }
+
+      // Les raccourcis à une lettre ne doivent jamais interférer avec la
+      // saisie (recherche, formulaires des modales…) — seule Échap reste
+      // active en toute circonstance (voir ci-dessus).
+      if (isTypingTarget(e.target) || anyOverlayOpen()) return;
+
+      const resultsVisible = document.getElementById('results-actions').style.display !== 'none';
+
+      switch (e.key) {
+        case '/':
+          e.preventDefault();
+          document.getElementById('q').focus();
+          break;
+        case 'ArrowDown':
+          if (getResultCards().length) { e.preventDefault(); setFocusedResult(focusedResultIndex + 1); }
+          break;
+        case 'ArrowUp':
+          if (getResultCards().length) { e.preventDefault(); setFocusedResult(focusedResultIndex - 1); }
+          break;
+        case 'ArrowLeft': {
+          const prevBtn = document.querySelector('#pagination .page-prev');
+          if (prevBtn) { e.preventDefault(); prevBtn.click(); }
+          break;
+        }
+        case 'ArrowRight': {
+          const nextBtn = document.querySelector('#pagination .page-next');
+          if (nextBtn) { e.preventDefault(); nextBtn.click(); }
+          break;
+        }
+        case 'Enter': {
+          const cards = getResultCards();
+          if (focusedResultIndex >= 0 && cards[focusedResultIndex]) {
+            e.preventDefault();
+            toggleResultAccordion(cards[focusedResultIndex]);
+          }
+          break;
+        }
+        case 'c': case 'C':
+          if (resultsVisible) toggleCompactView();
+          break;
+        case 's': case 'S':
+          if (resultsVisible) saveCurrentSearch();
+          break;
+        case 'r': case 'R':
+          if (resultsVisible) clearAllFilters();
+          break;
+        case '?':
+          if (uiConfigCache.help_enabled) window.open('/help', '_blank');
+          break;
+      }
+    });
+
+    loadEngagementConfig();
+    loadUiConfig();
+    loadIsAdmin();
+    loadSearchableSources();
+    applyCollapsedFacets();
+    updateCompactToggleLabel();
   </script>
 </body>
 </html>

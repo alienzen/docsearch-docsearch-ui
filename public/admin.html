@@ -66,6 +66,9 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Administration</span>
+    <button id="toggle-all-panels" onclick="toggleAllPanels()"
+            style="margin-left:auto;background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
+    <a href="/admin-help.html">Aide</a>
     <a href="/stats.html">Statistiques</a>
     <a href="/">← Recherche</a>
   </header>
@@ -79,7 +82,7 @@
 
     // ── Accordéon ────────────────────────────────────────────────
     // État tenu à part du HTML régénéré à chaque refresh() (toutes les
-    // 5s pour État des composants/Métriques, ou après chaque action) —
+    // 5s pour État des composants, ou après chaque action) —
     // sans ça, replier une section serait annulé au prochain
     // rafraîchissement. Persisté en localStorage (par navigateur/poste,
     // pas de compte utilisateur dans cette appli) pour retrouver les
@@ -106,6 +109,34 @@
       } catch (e) {
         // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
       }
+      updateToggleAllLabel();
+    }
+
+    // Un seul bouton, qui replie ou déplie TOUS les panneaux selon l'état
+    // actuel — si au moins un est déplié, l'action est "tout replier" ;
+    // une fois tous repliés, elle devient "tout déplier". Évite d'avoir
+    // deux boutons séparés pour un cas d'usage aussi simple.
+    function toggleAllPanels() {
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      panels.forEach(p => {
+        p.classList.toggle('collapsed', anyExpanded);
+        if (anyExpanded) collapsedPanels.add(p.id); else collapsedPanels.delete(p.id);
+      });
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+      updateToggleAllLabel();
+    }
+
+    function updateToggleAllLabel() {
+      const btn = document.getElementById('toggle-all-panels');
+      if (!btn) return;
+      const panels = document.querySelectorAll('#app .panel');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      btn.textContent = anyExpanded ? 'Tout replier' : 'Tout déplier';
     }
 
     function panelWrap(id, title, subtitle, bodyHtml) {
@@ -155,13 +186,6 @@
       const tika = s.tika || {};
       const workers = s.workers || {};
       const watcher = s.watcher || {};
-      const sources = s.sources || {};
-      const sourceRows = Object.entries(sources).map(([name, info]) => `
-        <tr>
-          <td>${name}</td>
-          <td>${info.es_index}</td>
-          <td style="text-align:right;">${(info.indexed ?? 0).toLocaleString('fr-FR')}</td>
-        </tr>`).join('');
 
       const body = `
           <div class="status-grid">
@@ -195,59 +219,13 @@
               <div class="value">${workers.pending_documents ?? '?'}</div>
               <div class="muted">document(s) en attente de traitement</div>
             </div>
-          </div>
-          <div class="muted" style="margin-top:16px;margin-bottom:6px;">Documents indexés par source</div>
-          <table>
-            <thead><tr><th>Source</th><th>Index</th><th style="text-align:right;">Documents</th></tr></thead>
-            <tbody>${sourceRows || '<tr><td colspan="3" class="muted">Aucune source.</td></tr>'}</tbody>
-          </table>`;
+          </div>`;
       return panelWrap('status-panel', 'État des composants', 'rafraîchi toutes les 5s', body);
-    }
-
-    // ── Métriques d'indexation (documents, taille, répartition) ──
-    async function renderMetrics() {
-      const m = await api('/metrics');
-      const totalExt = (m.by_extension || []).reduce((s, b) => s + b.doc_count, 0) || 1;
-      const rows = (m.by_extension || []).map(b => {
-        const pct = Math.round((b.doc_count / totalExt) * 100);
-        return `
-          <tr>
-            <td>${b.key || '(sans extension)'}</td>
-            <td style="text-align:right;">${b.doc_count.toLocaleString('fr-FR')}</td>
-            <td style="width:40%;">
-              <div style="background:#eee;border-radius:4px;overflow:hidden;height:8px;">
-                <div style="background:#185FA5;height:100%;width:${pct}%;"></div>
-              </div>
-            </td>
-          </tr>`;
-      }).join('');
-
-      const body = `
-          <div class="status-grid" style="margin-bottom:16px;">
-            <div class="status-card">
-              <div class="name">Documents indexés</div>
-              <div class="value">${(m.indexed ?? 0).toLocaleString('fr-FR')}</div>
-            </div>
-            <div class="status-card">
-              <div class="name">Taille de l'index</div>
-              <div class="value">${m.size_gb ?? '?'} Go</div>
-            </div>
-            <div class="status-card">
-              <div class="name">Version Elasticsearch</div>
-              <div class="value">${m.es_version ?? '?'}</div>
-            </div>
-          </div>
-          <div class="muted" style="margin-bottom:6px;">Répartition par extension</div>
-          <table>
-            <thead><tr><th>Extension</th><th style="text-align:right;">Documents</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="3" class="muted">Aucun document indexé.</td></tr>'}</tbody>
-          </table>`;
-      return panelWrap('metrics-panel', "Métriques d'indexation", null, body);
     }
 
     // ── Types de fichiers ───────────────────────────────────────
     async function renderFiletypes() {
-      if (!sourcesCache[selectedFiletypeSource]) selectedFiletypeSource = 'documents';
+      if (!fileSourcesCache[selectedFiletypeSource]) selectedFiletypeSource = 'documents';
       const cfg = await api(`/admin/filetypes?source=${encodeURIComponent(selectedFiletypeSource)}`);
       const rows = Object.entries(cfg).map(([ext, rule]) => `
         <tr data-ext="${ext}">
@@ -261,7 +239,7 @@
       const body = `
           <div class="row">
             <label class="muted" for="filetype-source">Source :</label>
-            <select id="filetype-source">${sourceOptions(selectedFiletypeSource)}</select>
+            <select id="filetype-source">${fileSourceOptions(selectedFiletypeSource)}</select>
           </div>
           <table>
             <thead><tr><th>Extension</th><th>Activé</th><th>Taille max (Mo)</th><th></th><th></th></tr></thead>
@@ -356,9 +334,170 @@
       });
     }
 
+    // ── Mesure de satisfaction (pouce + NPS + suggestions) ───────
+    // Le tracking de clic n'a pas de bascule ici : signal passif,
+    // toujours actif (voir docsearch-api/search_api.py).
+    async function renderEngagement() {
+      const cfg = await api('/engagement-config');
+      const body = `
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eng-feedback" ${cfg.feedback_enabled ? 'checked' : ''} />
+              Pouce haut/bas après chaque recherche
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eng-nps" ${cfg.nps_enabled ? 'checked' : ''} />
+              Popup NPS occasionnelle (toutes les 20 recherches, cooldown 30 jours)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eng-suggestions" ${cfg.suggestions_enabled ? 'checked' : ''} />
+              Lien "Suggérer une idée" dans l'en-tête de recherche
+            </label>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Le tracking de clic sur les résultats reste toujours actif — c'est un signal passif,
+            sans widget ni friction pour l'utilisateur, pas de bascule nécessaire.
+          </p>`;
+      return panelWrap('engagement-panel', 'Mesure de satisfaction', "effectif immédiatement, pas de redémarrage", body);
+    }
+
+    function wireEngagement() {
+      document.getElementById('eng-feedback')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/engagement-config', { method: 'POST', body: JSON.stringify({ feedback_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('eng-nps')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/engagement-config', { method: 'POST', body: JSON.stringify({ nps_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('eng-suggestions')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/engagement-config', { method: 'POST', body: JSON.stringify({ suggestions_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+    }
+
+    // ── Interface (bascules sans rapport avec la satisfaction) ───
+    async function renderUiConfig() {
+      const cfg = await api('/ui-config');
+      const body = `
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-chat" ${cfg.chat_enabled ? 'checked' : ''} />
+              Lien "Assistant IA" dans l'en-tête de recherche
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-footer" ${cfg.footer_enabled ? 'checked' : ''} />
+              Pied de page de la page de recherche
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-admin-links" ${cfg.admin_links_enabled ? 'checked' : ''} />
+              Liens "Administration"/"Statistiques" (même pour les utilisateurs autorisés)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-export" ${cfg.export_enabled ? 'checked' : ''} />
+              Export des résultats de recherche (XLSX/DOCX)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-help" ${cfg.help_enabled ? 'checked' : ''} />
+              Lien "❓ Aide" dans l'en-tête de recherche (et raccourci clavier "?")
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-lists" ${cfg.collections_enabled ? 'checked' : ''} />
+              Sélection de documents et collections personnelles ("📋 Mes collections")
+            </label>
+          </div>`;
+      return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
+    }
+
+    function wireUiConfig() {
+      document.getElementById('ui-chat')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ chat_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-footer')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ footer_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-admin-links')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ admin_links_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-export')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ export_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-help')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ help_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-lists')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ collections_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+    }
+
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
-    // Complète les panneaux CRUD dédiés (Sources / Sources SQL / Sources
-    // web ci-dessous, qui gèrent chacun les champs propres à leur type)
+    // Complète les panneaux CRUD dédiés (Sources fichiers / Sources SQL /
+    // Sources web ci-dessous, qui gèrent chacun les champs propres à leur type)
     // par une liste transverse : compte de documents + bascule
     // "recherche activée" par source, quel que soit son type. Désactiver
     // la recherche n'arrête PAS l'ingestion (watcher/sql-worker/
@@ -375,7 +514,9 @@
           <td>${escapeHtml(s.label)}</td>
           <td>${TYPE_LABELS[s.type] || s.type}</td>
           <td class="muted">${s.es_index}</td>
+          <td class="muted">${escapeHtml(s.description || '')}</td>
           <td style="text-align:right;">${(s.indexed ?? 0).toLocaleString('fr-FR')}</td>
+          <td style="text-align:right;">${formatBytes(s.size_bytes)}</td>
           <td>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
               <input type="checkbox" class="src-searchable" ${s.searchable ? 'checked' : ''} />
@@ -386,14 +527,48 @@
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th style="text-align:right;">Documents</th><th>Recherche</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="5" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
           </table>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
 
     function escapeHtml(str) {
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 o';
+      const units = ['o', 'Ko', 'Mo', 'Go', 'To'];
+      let i = 0;
+      let value = bytes;
+      while (value >= 1024 && i < units.length - 1) {
+        value /= 1024;
+        i++;
+      }
+      return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    // Édition de libellé/description, générique, partagée par les panneaux
+    // Sources fichiers / Sources SQL / Sources web — contrairement à l'ancien
+    // renommage, ceci ne touche jamais au nom (clé de registre) d'une
+    // source, donc aucune répercussion sur les documents déjà indexés
+    // n'est nécessaire.
+    async function editSourceFieldPrompt(name, endpointBase, field, currentValue, promptLabel) {
+      const value = prompt(`${promptLabel} pour la source '${name}' :`, currentValue || '');
+      if (value === null || value.trim() === currentValue) return false;
+      const trimmed = value.trim();
+      if (field === 'label' && !trimmed) { alert('Le libellé ne peut pas être vide.'); return false; }
+      try {
+        await api(`${endpointBase}/${encodeURIComponent(name)}/${field}`, {
+          method: 'POST',
+          body: JSON.stringify({ [field]: trimmed }),
+        });
+        return true;
+      } catch (e) {
+        alert(`Erreur : ${e.message}`);
+        return false;
+      }
     }
 
     function wireAllSources() {
@@ -425,63 +600,85 @@
     // (filtres de chemin, scan) — persiste le choix de l'utilisateur
     // d'un rafraîchissement à l'autre plutôt que de revenir à
     // "documents" à chaque fois.
-    let sourcesCache = { documents: { es_index: 'documents', folder: '', label: 'Documents' } };
+    let fileSourcesCache = { documents: { es_index: 'documents', folder: '', label: 'Documents' } };
     let selectedFilterSource = 'documents';
     let selectedScanSource = 'documents';
     let selectedFiletypeSource = 'documents';
 
-    function sourceOptions(selected) {
-      return Object.entries(sourcesCache).map(([name, s]) =>
+    function fileSourceOptions(selected) {
+      return Object.entries(fileSourcesCache).map(([name, s]) =>
         `<option value="${name}" ${name === selected ? 'selected' : ''}>${s.label || name} (${s.es_index})</option>`
       ).join('');
     }
 
-    async function renderSources() {
-      sourcesCache = await api('/admin/sources');
-      const rows = Object.entries(sourcesCache).map(([name, s]) => `
+    async function renderFileSources() {
+      fileSourcesCache = await api('/admin/file-sources');
+      const rows = Object.entries(fileSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label || name}</td>
           <td>${s.es_index}</td>
           <td class="muted">${s.folder}</td>
-          <td>${name === 'documents' ? '' : '<button class="danger src-delete">Retirer</button>'}</td>
+          <td class="muted">${s.description || ''}</td>
+          <td><button class="secondary file-src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary file-src-edit-description">Modifier la description</button></td>
+          <td>${name === 'documents' ? '' : '<button class="danger file-src-delete">Retirer</button>'}</td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th>Description</th><th></th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
-            <input type="text" id="new-src-name" placeholder="nom (ex: finance)" />
-            <input type="text" id="new-src-index" placeholder="index ES (ex: finance_docs)" />
-            <input type="text" id="new-src-subfolder" placeholder="sous-dossier (défaut : = nom)" />
-            <input type="text" id="new-src-label" placeholder="libellé (optionnel)" />
-            <button id="add-source">Ajouter</button>
+            <input type="text" id="new-file-name" placeholder="nom (ex: finance)" />
+            <input type="text" id="new-file-index" placeholder="index ES (ex: finance_docs)" />
+            <input type="text" id="new-file-subfolder" placeholder="sous-dossier (défaut : = nom)" />
+            <input type="text" id="new-file-label" placeholder="libellé (optionnel)" />
+          </div>
+          <div class="row">
+            <input type="text" id="new-file-description" placeholder="description (optionnel)" />
+            <button id="add-file-source">Ajouter</button>
           </div>
           <p class="muted" style="margin-top:8px;">
             Créez d'abord le sous-dossier sur l'hôte (SOURCES_ROOT/&lt;nom&gt;), puis enregistrez-le
             ici — le watcher commence à l'observer sous ~5s, sans redémarrage. Lancez ensuite
             l'indexation initiale avec le panneau "Indexation" ci-dessous.
           </p>`;
-      return panelWrap('sources-panel', 'Sources', 'un répertoire indexé = un index Elasticsearch dédié', body);
+      return panelWrap('filesources-panel', 'Sources fichiers', 'un répertoire indexé = un index Elasticsearch dédié', body);
     }
 
-    function wireSources() {
-      document.querySelectorAll('.src-delete').forEach(btn => {
+    function wireFileSources() {
+      document.querySelectorAll('.file-src-edit-label').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = fileSourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/file-sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.file-src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = fileSourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/file-sources', 'description', current, 'Nouvelle description')) await refresh();
+        });
+      });
+      document.querySelectorAll('.file-src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
           if (!confirm(`Retirer la source '${name}' ? Son index Elasticsearch et ses documents ne seront PAS supprimés.`)) return;
-          await api(`/admin/sources/${name}`, { method: 'DELETE' });
+          await api(`/admin/file-sources/${name}`, { method: 'DELETE' });
           await refresh();
         });
       });
-      document.getElementById('add-source')?.addEventListener('click', async () => {
-        const name = document.getElementById('new-src-name').value.trim();
-        const es_index = document.getElementById('new-src-index').value.trim();
-        const subfolder = document.getElementById('new-src-subfolder').value.trim() || null;
-        const label = document.getElementById('new-src-label').value.trim() || null;
+      document.getElementById('add-file-source')?.addEventListener('click', async () => {
+        const name = document.getElementById('new-file-name').value.trim();
+        const es_index = document.getElementById('new-file-index').value.trim();
+        const subfolder = document.getElementById('new-file-subfolder').value.trim() || null;
+        const label = document.getElementById('new-file-label').value.trim() || null;
+        const description = document.getElementById('new-file-description').value.trim() || null;
         if (!name || !es_index) { alert('Nom et index ES sont requis.'); return; }
-        await api('/admin/sources', { method: 'POST', body: JSON.stringify({ name, es_index, subfolder, label }) });
+        await api('/admin/file-sources', { method: 'POST', body: JSON.stringify({ name, es_index, subfolder, label, description }) });
         await refresh();
       });
     }
@@ -497,23 +694,33 @@
     // passage effectif reste au sql-worker déjà actif (poll automatique
     // à son propre intervalle), l'admin ne gère que le registre — l'API
     // ne résout jamais le DSN et ne se connecte jamais à une base SQL.
+    let sqlSourcesCache = {};
+    let sqlDsnsCache = [];
+
     async function renderSqlSources() {
-      const sources = await api('/admin/sql-sources');
-      const rows = Object.entries(sources).map(([name, s]) => `
+      [sqlSourcesCache, sqlDsnsCache] = await Promise.all([
+        api('/admin/sql-sources'),
+        api('/admin/sql-dsns'),
+      ]);
+      const rows = Object.entries(sqlSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label}</td>
           <td>${s.db_type}</td>
           <td>${s.es_index}</td>
           <td>${s.id_column}</td>
           <td class="muted">${s.connection_ref}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td class="muted">${s.description || ''}</td>
+          <td><button class="secondary sql-src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary sql-src-edit-description">Modifier la description</button></td>
           <td><button class="danger sql-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th>Description</th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="11" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
           <div style="margin-top:14px;">
             <div class="row">
@@ -522,12 +729,16 @@
                 <option value="postgresql">postgresql</option>
                 <option value="mysql">mysql</option>
               </select>
-              <input type="text" id="new-sql-connref" placeholder="connection_ref (ex: CLIENTS_PG_DSN)" />
+              <input type="text" id="new-sql-connref" list="sql-dsn-names" placeholder="connection_ref (ex: CLIENTS_PG_DSN — variable d'environnement ou DSN enregistré ci-dessous)" />
             </div>
             <div class="row">
               <input type="text" id="new-sql-index" placeholder="index ES (ex: clients_pg_sql)" />
               <input type="text" id="new-sql-idcol" placeholder="colonne ID (ex: id)" />
               <input type="number" id="new-sql-interval" placeholder="intervalle (s)" value="300" min="10" style="max-width:130px;" />
+            </div>
+            <div class="row">
+              <input type="text" id="new-sql-label" placeholder="libellé (optionnel)" />
+              <input type="text" id="new-sql-description" placeholder="description (optionnel)" />
             </div>
             <div class="row">
               <textarea id="new-sql-query" rows="2" style="flex:1;font:inherit;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
@@ -541,13 +752,60 @@
           </div>
           <p class="muted" style="margin-top:8px;">
             <code>connection_ref</code> est le NOM d'une variable d'environnement contenant le DSN complet
-            (définie dans le .env de docsearch-infra) — jamais le DSN lui-même, qui ne transite ni par ici
-            ni par Redis. Types ES possibles pour le mapping : keyword, text, long, double, date, boolean.
+            (définie dans le .env de docsearch-infra) OU le nom d'un DSN chiffré enregistré ci-dessous —
+            la variable d'environnement reste TOUJOURS prioritaire si elle existe. Le DSN en clair ne
+            transite jamais par ici ni par Redis dans le premier cas ; dans le second, il est chiffré avant
+            stockage (voir ci-dessous). Types ES possibles pour le mapping : keyword, text, long, double,
+            date, boolean.
+          </p>
+          <datalist id="sql-dsn-names">
+            ${sqlDsnsCache.map(d => `<option value="${d.name}"></option>`).join('')}
+          </datalist>
+
+          <h3 style="margin-top:22px;">DSN chiffrés (enregistrés depuis ce panneau)</h3>
+          <table>
+            <thead><tr><th>Nom</th><th>Indice (schéma + hôte, sans identifiants)</th><th></th></tr></thead>
+            <tbody>${sqlDsnsCache.map(d => `
+              <tr data-name="${d.name}">
+                <td>${d.name}</td>
+                <td class="muted">${d.hint}</td>
+                <td><button class="danger sql-dsn-delete">Retirer</button></td>
+              </tr>`).join('') || '<tr><td colspan="3" class="muted">Aucun DSN enregistré ici.</td></tr>'}
+            </tbody>
+          </table>
+          <div style="margin-top:14px;">
+            <div class="row">
+              <input type="text" id="new-dsn-name" placeholder="nom (ex: CLIENTS_PG_DSN)" />
+              <input type="password" id="new-dsn-value" placeholder="DSN complet (ex: postgresql+psycopg2://user:motdepasse@host:5432/db)" style="flex:2;" />
+            </div>
+            <button id="add-sql-dsn">Enregistrer le DSN</button>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            Alternative à une variable d'environnement dans le <code>.env</code> de docsearch-infra : ce
+            DSN est chiffré (Fernet) puis stocké dans Redis, sans redémarrage de conteneur, sans accès
+            SSH/hôte. Il n'est plus jamais réaffiché après l'enregistrement — seul l'indice ci-dessus
+            (schéma + hôte, jamais les identifiants) reste consultable. Nécessite
+            <code>DSN_ENCRYPTION_KEY</code> configurée côté docsearch-api ET docsearch-ingestion (voir
+            .env.example).
           </p>`;
       return panelWrap('sqlsources-panel', 'Sources SQL', 'requêtes PostgreSQL/MySQL indexées, réconciliées à chaque passage', body);
     }
 
     function wireSqlSources() {
+      document.querySelectorAll('.sql-src-edit-label').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = sqlSourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.sql-src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = sqlSourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'description', current, 'Nouvelle description')) await refresh();
+        });
+      });
       document.querySelectorAll('.sql-src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
@@ -565,6 +823,8 @@
         const poll_interval_seconds = parseInt(document.getElementById('new-sql-interval').value, 10) || 300;
         const query           = document.getElementById('new-sql-query').value.trim();
         const fieldsRaw        = document.getElementById('new-sql-fields').value.trim();
+        const label            = document.getElementById('new-sql-label').value.trim() || null;
+        const description       = document.getElementById('new-sql-description').value.trim() || null;
 
         if (!name || !connection_ref || !es_index || !id_column || !query || !fieldsRaw) {
           alert('Tous les champs sont requis (nom, connection_ref, index ES, colonne ID, requête, mapping fields).');
@@ -580,8 +840,37 @@
         try {
           await api('/admin/sql-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds }),
+            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label, description }),
           });
+          await refresh();
+        } catch (e) {
+          alert(`Erreur : ${e.message}`);
+        }
+      });
+
+      document.querySelectorAll('.sql-dsn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          if (!confirm(`Retirer le DSN chiffré '${name}' ? Toute source SQL dont le connection_ref pointe vers ce nom échouera à son prochain passage (sauf si une variable d'environnement du même nom existe).`)) return;
+          try {
+            await api(`/admin/sql-dsns/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            await refresh();
+          } catch (e) {
+            alert(`Erreur : ${e.message}`);
+          }
+        });
+      });
+
+      document.getElementById('add-sql-dsn')?.addEventListener('click', async () => {
+        const name = document.getElementById('new-dsn-name').value.trim();
+        const dsn  = document.getElementById('new-dsn-value').value.trim();
+        if (!name || !dsn) {
+          alert('Le nom et le DSN sont tous les deux requis.');
+          return;
+        }
+        try {
+          await api('/admin/sql-dsns', { method: 'POST', body: JSON.stringify({ name, dsn }) });
+          document.getElementById('new-dsn-value').value = ''; // jamais laisser le DSN dans le champ après envoi
           await refresh();
         } catch (e) {
           alert(`Erreur : ${e.message}`);
@@ -600,23 +889,38 @@
     // voir docsearch-infra/crawlers/*.yml, et tourne selon son propre
     // planning). web-worker (déjà actif) prend en compte la nouvelle
     // source sous ~5s, sans redémarrage.
+    let webSourcesCache = {};
+
     async function renderWebSources() {
-      const sources = await api('/admin/web-sources');
-      const rows = Object.entries(sources).map(([name, s]) => `
+      webSourcesCache = await api('/admin/web-sources');
+      const rows = Object.entries(webSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
+          <td>${s.label}</td>
           <td class="muted">${s.crawl_index}</td>
           <td>${s.es_index}</td>
           <td>${s.acl_public ? 'public' : 'privé'}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
+          <td class="muted">${s.description || ''}</td>
+          <td>${s.paused
+            ? '<span class="muted">⏸ suspendu</span>'
+            : '<span style="color:#1f9254;">▶ actif</span>'}</td>
+          <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
+          <td><button class="secondary web-src-edit-label">Modifier le libellé</button></td>
+          <td><button class="secondary web-src-edit-description">Modifier la description</button></td>
           <td><button class="danger web-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Description</th><th>Crawl</th><th></th><th></th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="12" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
+          <p class="muted" style="margin-top:8px;">
+            « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
+            de crawl) — le conteneur Elastic Open Web Crawler lui-même, s'il tourne en planification
+            continue, n'est pas piloté depuis cette interface et continue son cycle indépendamment.
+          </p>
           <div style="margin-top:14px;">
             <div class="row">
               <input type="text" id="new-web-name" placeholder="nom (ex: cc_decisions)" />
@@ -627,6 +931,10 @@
               <label class="muted" for="new-web-public">Contenu public (sans authentification)</label>
               <input type="checkbox" id="new-web-public" checked style="flex:0;" />
               <input type="number" id="new-web-interval" placeholder="intervalle (s)" value="3600" min="30" style="max-width:130px;" />
+              <input type="text" id="new-web-label" placeholder="libellé (optionnel)" />
+            </div>
+            <div class="row">
+              <input type="text" id="new-web-description" placeholder="description (optionnel)" />
             </div>
             <button id="add-web-source">Ajouter</button>
           </div>
@@ -639,6 +947,32 @@
     }
 
     function wireWebSources() {
+      document.querySelectorAll('.web-src-toggle-pause').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const currentlyPaused = e.target.textContent.trim() === 'Reprendre';
+          await api(`/admin/web-sources/${encodeURIComponent(name)}/pause`, {
+            method: 'POST',
+            body: JSON.stringify({ paused: !currentlyPaused }),
+          });
+          await refresh();
+        });
+      });
+      document.querySelectorAll('.web-src-edit-label').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = webSourcesCache[name]?.label || name;
+          if (await editSourceFieldPrompt(name, '/admin/web-sources', 'label', current, 'Nouveau libellé')) await refresh();
+        });
+      });
+      document.querySelectorAll('.web-src-edit-description').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const current = webSourcesCache[name]?.description || '';
+          if (await editSourceFieldPrompt(name, '/admin/web-sources', 'description', current, 'Nouvelle description')) await refresh();
+        });
+      });
       document.querySelectorAll('.web-src-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const name = e.target.closest('tr').dataset.name;
@@ -653,6 +987,8 @@
         const es_index       = document.getElementById('new-web-esindex').value.trim();
         const acl_public     = document.getElementById('new-web-public').checked;
         const poll_interval_seconds = parseInt(document.getElementById('new-web-interval').value, 10) || 3600;
+        const label          = document.getElementById('new-web-label').value.trim() || null;
+        const description    = document.getElementById('new-web-description').value.trim() || null;
 
         if (!name || !crawl_index || !es_index) {
           alert('Nom, index de crawl et index ES final sont requis.');
@@ -661,7 +997,7 @@
         try {
           await api('/admin/web-sources', {
             method: 'POST',
-            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds }),
+            body: JSON.stringify({ name, crawl_index, es_index, acl_public, poll_interval_seconds, label, description }),
           });
           await refresh();
         } catch (e) {
@@ -672,13 +1008,13 @@
 
     // ── Filtres de chemin ───────────────────────────────────────
     async function renderPathFilters() {
-      if (!sourcesCache[selectedFilterSource]) selectedFilterSource = 'documents';
+      if (!fileSourcesCache[selectedFilterSource]) selectedFilterSource = 'documents';
       const cfg = await api(`/admin/path-filters?source=${encodeURIComponent(selectedFilterSource)}`);
       const tag = (p, kind) => `<span class="tag">${p}<button data-pattern="${p}" data-kind="${kind}" class="rm-filter">✕</button></span>`;
       const body = `
           <div class="row">
             <label class="muted" for="filter-source">Source :</label>
-            <select id="filter-source">${sourceOptions(selectedFilterSource)}</select>
+            <select id="filter-source">${fileSourceOptions(selectedFilterSource)}</select>
           </div>
 
           <div class="muted" style="margin-top:10px;">Liste noire (exclus)</div>
@@ -747,12 +1083,12 @@
 
     // ── Déclenchement d'un scan ─────────────────────────────────
     function renderScan() {
-      if (!sourcesCache[selectedScanSource]) selectedScanSource = 'documents';
+      if (!fileSourcesCache[selectedScanSource]) selectedScanSource = 'documents';
       const body = `
           <p class="muted">Publie les fichiers d'UNE source sur Kafka pour indexation par les workers actifs (pool partagé entre toutes les sources) — ne bloque pas, suivre la progression dans "État des composants" ci-dessus.</p>
           <div class="row" style="margin-top:12px;">
             <label class="muted" for="scan-source">Source :</label>
-            <select id="scan-source">${sourceOptions(selectedScanSource)}</select>
+            <select id="scan-source">${fileSourceOptions(selectedScanSource)}</select>
             <input type="text" id="scan-subfolder" placeholder="sous-dossier (vide = dossier complet)" />
             <button id="scan-launch">Lancer un scan</button>
           </div>
@@ -782,23 +1118,23 @@
     async function refresh() {
       // Sources d'abord et à part (await, pas dans le lot ci-dessous) :
       // renderFiletypes()/renderPathFilters()/renderScan() lisent
-      // sourcesCache de façon SYNCHRONE pour peupler leur <select> — il
+      // fileSourcesCache de façon SYNCHRONE pour peupler leur <select> — il
       // doit déjà être à jour avant qu'ils s'exécutent, un
       // Promise.allSettled ne garantit pas cet ordre entre promesses
       // lancées en parallèle.
       let sourcesResult;
       try {
-        sourcesResult = { status: 'fulfilled', value: await renderSources() };
+        sourcesResult = { status: 'fulfilled', value: await renderFileSources() };
       } catch (e) {
         sourcesResult = { status: 'rejected', reason: e };
       }
 
-      const labels = ['Sources', 'État des composants', "Métriques d'indexation", 'Types de fichiers',
+      const labels = ['Sources fichiers', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
-                      'Toutes les sources'];
+                      'Toutes les sources', 'Mesure de satisfaction', 'Interface'];
       const results = [sourcesResult, ...await Promise.allSettled([
-        renderStatus(), renderMetrics(), renderFiletypes(), renderConfig(), renderPathFilters(),
-        renderSqlSources(), renderWebSources(), renderAllSources(),
+        renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
+        renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(), renderUiConfig(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -819,10 +1155,10 @@
       // Ordre d'AFFICHAGE seulement (État des composants en premier,
       // visibilité immédiate de la santé du cluster) — distinct de
       // l'ordre d'EXÉCUTION ci-dessus, qui doit rester Sources en
-      // premier pour peupler sourcesCache avant les panneaux qui le
+      // premier pour peupler fileSourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 8, 0, 2, 3, 4, 5, 6, 7];
+      const displayOrder = [1, 7, 0, 2, 3, 8, 9, 4, 5, 6];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -830,33 +1166,34 @@
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`;
       }).join('') + renderScan();
 
-      wireSources();
+      wireFileSources();
       wireFiletypes();
       wireConfig();
       wirePathFilters();
       wireSqlSources();
       wireWebSources();
       wireAllSources();
+      wireEngagement();
+      wireUiConfig();
       wireScan();
+      updateToggleAllLabel();
     }
 
     async function refreshStatusOnly() {
-      // Rafraîchissement léger périodique (état des composants +
-      // métriques d'indexation seulement) — pas les panneaux de
-      // configuration, qu'on ne veut pas réécraser pendant que
-      // l'utilisateur les édite. Ciblage par id (pas par position :
-      // '.panel' seul serait ambigu maintenant que plusieurs panneaux
-      // read-only coexistent).
-      const statusPanel  = document.getElementById('status-panel');
-      const metricsPanel = document.getElementById('metrics-panel');
-      if (!statusPanel || !metricsPanel) return;
+      // Rafraîchissement léger périodique (état des composants
+      // seulement) — pas les panneaux de configuration, qu'on ne veut
+      // pas réécraser pendant que l'utilisateur les édite. Ciblage par
+      // id (pas par position : '.panel' seul serait ambigu maintenant
+      // que plusieurs panneaux read-only coexistent).
+      const statusPanel = document.getElementById('status-panel');
+      if (!statusPanel) return;
 
-      const [statusResult, metricsResult] = await Promise.allSettled([renderStatus(), renderMetrics()]);
-      // allSettled : un échec sur l'un des deux (ex: index ES absent
-      // pour les métriques) ne doit pas empêcher l'autre panneau de
-      // se rafraîchir normalement.
-      if (statusResult.status === 'fulfilled')  statusPanel.outerHTML  = statusResult.value;
-      if (metricsResult.status === 'fulfilled') metricsPanel.outerHTML = metricsResult.value;
+      try {
+        statusPanel.outerHTML = await renderStatus();
+      } catch (e) {
+        // Échec transitoire (ES/Redis momentanément indisponible) : le
+        // panneau garde son dernier état affiché plutôt que de casser.
+      }
     }
 
     refresh();
