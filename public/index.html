@@ -574,6 +574,16 @@
       return found ? found.label : name;
     }
 
+    // Une source absente de allSources (échec de /searchable-sources, ou
+    // pas encore chargé) est traitée comme collectable par défaut — même
+    // logique de repli tolérant que sourceLabel() ci-dessus : on ne
+    // masque la case à cocher que si on SAIT positivement que la source
+    // l'interdit, jamais par défaut sur une donnée manquante.
+    function sourceCollectable(name) {
+      const found = allSources.find(s => s.name === name);
+      return found ? found.collectable !== false : true;
+    }
+
     function updateSourcesButtonLabel() {
       const btn = document.getElementById('sources-select-toggle');
       if (!btn) return;
@@ -944,11 +954,15 @@
           : '';
         // Décalage du corps (métadonnées/chemin/extrait) pour rester aligné
         // sous le titre — dépend de si la case de sélection précède l'icône.
-        const bodyIndent = uiConfigCache.collections_enabled ? 75 : 48;
+        // Absente à la fois si la fonctionnalité est désactivée globalement
+        // ET si la source de CE résultat précis n'autorise pas les
+        // collections (voir sourceCollectable() — /admin/all-sources).
+        const showSelectCb = uiConfigCache.collections_enabled && sourceCollectable(r.source);
+        const bodyIndent = showSelectCb ? 75 : 48;
         return `
         <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
           <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
-            ${uiConfigCache.collections_enabled ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+            ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
                      onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
                      aria-label="Sélectionner ce document" />` : ''}
             <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>

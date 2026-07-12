@@ -498,11 +498,17 @@
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
     // Complète les panneaux CRUD dédiés (Sources fichiers / Sources SQL /
     // Sources web ci-dessous, qui gèrent chacun les champs propres à leur type)
-    // par une liste transverse : compte de documents + bascule
-    // "recherche activée" par source, quel que soit son type. Désactiver
-    // la recherche n'arrête PAS l'ingestion (watcher/sql-worker/
-    // web-worker continuent normalement) — la source devient seulement
-    // invisible dans /search.
+    // par une liste transverse : compte de documents + deux bascules
+    // indépendantes, par source, quel que soit son type :
+    //   - "Recherche" : visibilité dans /search (voir set_searchable()).
+    //   - "Collections" : autorise (ou non) l'ajout de ses documents à une
+    //     collection ("Mes collections") — voir set_collectable() et
+    //     add_collection_document() dans search_api.py. Une source peut
+    //     très bien rester cherchable tout en étant exclue des collections
+    //     (ex: contenu volatile qu'on ne veut pas voir "épinglé" par un
+    //     utilisateur), les deux bascules sont donc bien séparées.
+    // Aucune des deux n'affecte l'ingestion (watcher/sql-worker/
+    // web-worker continuent toujours normalement).
     const TYPE_LABELS = { file: 'Bureautique', sql: 'SQL', web: 'Web' };
 
     async function renderAllSources() {
@@ -523,12 +529,18 @@
               <span class="muted">${s.searchable ? 'activée' : 'désactivée'}</span>
             </label>
           </td>
+          <td>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" class="src-collectable" ${s.collectable ? 'checked' : ''} />
+              <span class="muted">${s.collectable ? 'autorisée' : 'bloquée'}</span>
+            </label>
+          </td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
           </table>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
@@ -587,6 +599,27 @@
             label.textContent = searchable ? 'activée' : 'désactivée';
           } catch (err) {
             e.target.checked = !searchable;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('.src-collectable').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const type = tr.dataset.type;
+          const collectable = e.target.checked;
+          const label = e.target.nextElementSibling;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/all-sources/${encodeURIComponent(name)}/collectable?type=${type}`, {
+              method: 'POST', body: JSON.stringify({ collectable }),
+            });
+            label.textContent = collectable ? 'autorisée' : 'bloquée';
+          } catch (err) {
+            e.target.checked = !collectable;
             alert(`Erreur : ${err.message}`);
           } finally {
             e.target.disabled = false;
@@ -685,17 +718,22 @@
 
     // ── Sources SQL ──────────────────────────────────────────────
     // Résultat d'une requête PostgreSQL/MySQL indexé dans son propre
-    // index ES (voir docsearch-ingestion/app/sql_indexer.py). Le mapping
-    // colonnes -> champs ES ("fields") est saisi en JSON brut plutôt
-    // qu'un formulaire dédié par colonne — c'est le même format que
-    // celui déjà utilisé par ./manage.sh add-sql-source, pas une
-    // nouvelle convention à apprendre. Contrairement aux sources
-    // fichiers, il n'y a pas de bouton "lancer maintenant" ici : le
-    // passage effectif reste au sql-worker déjà actif (poll automatique
-    // à son propre intervalle), l'admin ne gère que le registre — l'API
-    // ne résout jamais le DSN et ne se connecte jamais à une base SQL.
+    // index ES (voir docsearch-ingestion/app/sql_indexer.py). La liste
+    // récapitule chaque source ; "Modifier" ouvre un formulaire complet
+    // (requête + mapping colonne -> champ ES ligne par ligne, plus
+    // besoin d'écrire du JSON à la main) pré-rempli avec ses valeurs
+    // actuelles — le même formulaire sert à la création (name/es_index
+    // vides et modifiables) et à l'édition (name/es_index figés : les
+    // changer reviendrait à créer une source distincte plutôt qu'à
+    // modifier celle-ci, voir sql_sources_config.add_source). Contraire-
+    // ment aux sources fichiers, il n'y a pas de bouton "lancer
+    // maintenant" ici : le passage effectif reste au sql-worker déjà actif
+    // (poll automatique à son propre intervalle), l'admin ne gère que le
+    // registre — l'API ne résout jamais le DSN et ne se connecte jamais
+    // à une base SQL.
     let sqlSourcesCache = {};
     let sqlDsnsCache = [];
+    const SQL_ES_TYPES = ["keyword", "text", "long", "double", "date", "boolean"];
 
     async function renderSqlSources() {
       [sqlSourcesCache, sqlDsnsCache] = await Promise.all([
@@ -705,59 +743,23 @@
       const rows = Object.entries(sqlSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
-          <td>${s.label}</td>
-          <td>${s.db_type}</td>
+          <td>${s.label || ''}</td>
           <td>${s.es_index}</td>
-          <td>${s.id_column}</td>
-          <td class="muted">${s.connection_ref}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
           <td class="muted">${s.description || ''}</td>
-          <td><button class="secondary sql-src-edit-label">Modifier le libellé</button></td>
-          <td><button class="secondary sql-src-edit-description">Modifier la description</button></td>
+          <td><button class="secondary sql-src-edit">Modifier</button></td>
           <td><button class="danger sql-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Type</th><th>Index ES</th><th>Col. ID</th><th>connection_ref</th><th>Intervalle</th><th>Description</th><th></th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="11" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Intervalle</th><th>Description</th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
-          <div style="margin-top:14px;">
-            <div class="row">
-              <input type="text" id="new-sql-name" placeholder="nom (ex: clients_pg)" />
-              <select id="new-sql-dbtype">
-                <option value="postgresql">postgresql</option>
-                <option value="mysql">mysql</option>
-              </select>
-              <input type="text" id="new-sql-connref" list="sql-dsn-names" placeholder="connection_ref (ex: CLIENTS_PG_DSN — variable d'environnement ou DSN enregistré ci-dessous)" />
-            </div>
-            <div class="row">
-              <input type="text" id="new-sql-index" placeholder="index ES (ex: clients_pg_sql)" />
-              <input type="text" id="new-sql-idcol" placeholder="colonne ID (ex: id)" />
-              <input type="number" id="new-sql-interval" placeholder="intervalle (s)" value="300" min="10" style="max-width:130px;" />
-            </div>
-            <div class="row">
-              <input type="text" id="new-sql-label" placeholder="libellé (optionnel)" />
-              <input type="text" id="new-sql-description" placeholder="description (optionnel)" />
-            </div>
-            <div class="row">
-              <textarea id="new-sql-query" rows="2" style="flex:1;font:inherit;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
-                        placeholder="SELECT id, nom, email FROM clients WHERE actif = true"></textarea>
-            </div>
-            <div class="row">
-              <textarea id="new-sql-fields" rows="4" style="flex:1;font:12px/1.4 monospace;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
-                        placeholder='[{"column":"id","es_field":"id","es_type":"keyword"},{"column":"nom","es_field":"nom","es_type":"text","analyzer":"french"},{"column":"email","es_field":"email","es_type":"keyword"}]'></textarea>
-            </div>
-            <button id="add-sql-source">Ajouter</button>
-          </div>
-          <p class="muted" style="margin-top:8px;">
-            <code>connection_ref</code> est le NOM d'une variable d'environnement contenant le DSN complet
-            (définie dans le .env de docsearch-infra) OU le nom d'un DSN chiffré enregistré ci-dessous —
-            la variable d'environnement reste TOUJOURS prioritaire si elle existe. Le DSN en clair ne
-            transite jamais par ici ni par Redis dans le premier cas ; dans le second, il est chiffré avant
-            stockage (voir ci-dessous). Types ES possibles pour le mapping : keyword, text, long, double,
-            date, boolean.
-          </p>
+
+          <div id="sql-form-container" style="margin-top:14px;"></div>
+          <button id="sql-new-source-btn" class="secondary" style="margin-top:10px;">+ Nouvelle source SQL</button>
+
           <datalist id="sql-dsn-names">
             ${sqlDsnsCache.map(d => `<option value="${d.name}"></option>`).join('')}
           </datalist>
@@ -791,19 +793,131 @@
       return panelWrap('sqlsources-panel', 'Sources SQL', 'requêtes PostgreSQL/MySQL indexées, réconciliées à chaque passage', body);
     }
 
-    function wireSqlSources() {
-      document.querySelectorAll('.sql-src-edit-label').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const name = e.target.closest('tr').dataset.name;
-          const current = sqlSourcesCache[name]?.label || name;
-          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'label', current, 'Nouveau libellé')) await refresh();
-        });
+    // Une ligne du tableau de mapping colonne SQL -> champ ES. `f` peut
+    // être partiel/vide (nouvelle ligne ajoutée par l'utilisateur).
+    function sqlFieldRowHtml(f) {
+      f = f || {};
+      const typeOptions = SQL_ES_TYPES.map(t =>
+        `<option value="${t}" ${f.es_type === t ? 'selected' : ''}>${t}</option>`).join('');
+      return `
+        <tr class="sql-field-row">
+          <td><input type="text" class="sql-field-column" value="${escapeHtml(f.column || '')}" placeholder="colonne SQL" /></td>
+          <td><input type="text" class="sql-field-esfield" value="${escapeHtml(f.es_field || '')}" placeholder="champ ES" /></td>
+          <td><select class="sql-field-estype">${typeOptions}</select></td>
+          <td><input type="text" class="sql-field-analyzer" value="${escapeHtml(f.analyzer || '')}" placeholder="ex: french (texte seul.)" /></td>
+          <td><button type="button" class="danger sql-field-remove-row" title="Retirer cette colonne">✕</button></td>
+        </tr>`;
+    }
+
+    // Formulaire complet (requête + mapping), partagé par la création et
+    // l'édition. `name`/`source` absents => création (champs nom/index
+    // ES vides et modifiables) ; présents => édition (nom/index ES figés,
+    // le reste pré-rempli avec les valeurs actuelles).
+    function sqlSourceFormHtml(name, source) {
+      const isEdit = !!source;
+      const fields = (source?.fields?.length ? source.fields : [{ column: 'id', es_field: 'id', es_type: 'keyword' }]);
+      return `
+        <div class="panel" style="border:1px dashed #185FA5;">
+          <h3 style="margin-bottom:14px;">${isEdit ? `Modifier « ${escapeHtml(name)} »` : 'Nouvelle source SQL'}</h3>
+          <div class="row">
+            <input type="text" id="sql-form-name" placeholder="nom (ex: clients_pg)" value="${escapeHtml(name || '')}" ${isEdit ? 'disabled' : ''} />
+            <select id="sql-form-dbtype" title="Sert à vérifier que le DSN résolu correspond bien au type déclaré (préfixe postgresql:// ou mysql://), avant même de tenter la connexion.">
+              <option value="postgresql" ${source?.db_type !== 'mysql' ? 'selected' : ''}>postgresql</option>
+              <option value="mysql" ${source?.db_type === 'mysql' ? 'selected' : ''}>mysql</option>
+            </select>
+            <input type="text" id="sql-form-connref" list="sql-dsn-names" value="${escapeHtml(source?.connection_ref || '')}"
+                   placeholder="connection_ref (ex: CLIENTS_PG_DSN — variable d'environnement ou DSN enregistré ci-dessous)" />
+          </div>
+          <div class="row">
+            <input type="text" id="sql-form-index" placeholder="index ES (ex: clients_pg_sql)" value="${escapeHtml(source?.es_index || '')}" ${isEdit ? 'disabled' : ''} />
+            <input type="text" id="sql-form-idcol" placeholder="colonne ID (ex: id)" value="${escapeHtml(source?.id_column || 'id')}" />
+            <input type="number" id="sql-form-interval" placeholder="intervalle (s)" value="${source?.poll_interval_seconds || 300}" min="10" style="max-width:130px;" />
+          </div>
+          <div class="row">
+            <input type="text" id="sql-form-label" placeholder="libellé (optionnel)" value="${escapeHtml(source?.label || '')}" />
+            <input type="text" id="sql-form-description" placeholder="description (optionnel)" value="${escapeHtml(source?.description || '')}" />
+          </div>
+          <div class="row">
+            <textarea id="sql-form-query" rows="3" style="flex:1;font:13px/1.4 monospace;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
+                      placeholder="SELECT id, nom, email FROM clients WHERE actif = true">${escapeHtml(source?.query || '')}</textarea>
+          </div>
+
+          <h4 style="margin:16px 0 8px;">Mapping colonnes → champs Elasticsearch</h4>
+          <table>
+            <thead><tr><th>Colonne SQL</th><th>Champ ES</th><th>Type ES</th><th>Analyseur</th><th></th></tr></thead>
+            <tbody id="sql-fields-rows">${fields.map(sqlFieldRowHtml).join('')}</tbody>
+          </table>
+          <button type="button" class="secondary" id="sql-add-field-row" style="margin-top:8px;">+ Ajouter une colonne</button>
+
+          <p class="muted" style="margin-top:12px;">
+            <code>connection_ref</code> est le NOM d'une variable d'environnement contenant le DSN complet
+            (définie dans le .env de docsearch-infra) OU le nom d'un DSN chiffré enregistré ci-dessous —
+            la variable d'environnement reste TOUJOURS prioritaire si elle existe. Le DSN en clair ne
+            transite jamais par ici ni par Redis dans le premier cas ; dans le second, il est chiffré avant
+            stockage. "Analyseur" n'a de sens que pour le type "text" (ex: french) — laisser vide sinon.
+          </p>
+
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button id="sql-form-save">Enregistrer</button>
+            <button type="button" class="secondary" id="sql-form-cancel">Annuler</button>
+          </div>
+        </div>`;
+    }
+
+    function wireSqlSourceForm(existingName) {
+      document.getElementById('sql-add-field-row')?.addEventListener('click', () => {
+        document.getElementById('sql-fields-rows').insertAdjacentHTML('beforeend', sqlFieldRowHtml());
       });
-      document.querySelectorAll('.sql-src-edit-description').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+      document.querySelectorAll('.sql-field-remove-row').forEach(btn => {
+        btn.addEventListener('click', (e) => e.target.closest('tr').remove());
+      });
+      document.getElementById('sql-form-cancel')?.addEventListener('click', () => {
+        document.getElementById('sql-form-container').innerHTML = '';
+      });
+      document.getElementById('sql-form-save')?.addEventListener('click', async () => {
+        const name = existingName || document.getElementById('sql-form-name').value.trim();
+        const db_type = document.getElementById('sql-form-dbtype').value;
+        const connection_ref = document.getElementById('sql-form-connref').value.trim();
+        const es_index = document.getElementById('sql-form-index').value.trim();
+        const id_column = document.getElementById('sql-form-idcol').value.trim();
+        const poll_interval_seconds = parseInt(document.getElementById('sql-form-interval').value, 10) || 300;
+        const query = document.getElementById('sql-form-query').value.trim();
+        const label = document.getElementById('sql-form-label').value.trim() || null;
+        const description = document.getElementById('sql-form-description').value.trim() || null;
+
+        const fields = Array.from(document.querySelectorAll('#sql-fields-rows .sql-field-row')).map(row => {
+          const column   = row.querySelector('.sql-field-column').value.trim();
+          const es_field = row.querySelector('.sql-field-esfield').value.trim();
+          const es_type  = row.querySelector('.sql-field-estype').value;
+          const analyzer = row.querySelector('.sql-field-analyzer').value.trim() || null;
+          return { column, es_field, es_type, analyzer };
+        }).filter(f => f.column && f.es_field);
+
+        if (!name || !connection_ref || !es_index || !id_column || !query || !fields.length) {
+          alert('Tous les champs sont requis (nom, connection_ref, index ES, colonne ID, requête, au moins une colonne de mapping).');
+          return;
+        }
+        try {
+          await api('/admin/sql-sources', {
+            method: 'POST',
+            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label, description }),
+          });
+          document.getElementById('sql-form-container').innerHTML = '';
+          await refresh();
+        } catch (e) {
+          alert(`Erreur : ${e.message}`);
+        }
+      });
+    }
+
+    function wireSqlSources() {
+      document.querySelectorAll('.sql-src-edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
           const name = e.target.closest('tr').dataset.name;
-          const current = sqlSourcesCache[name]?.description || '';
-          if (await editSourceFieldPrompt(name, '/admin/sql-sources', 'description', current, 'Nouvelle description')) await refresh();
+          const container = document.getElementById('sql-form-container');
+          container.innerHTML = sqlSourceFormHtml(name, sqlSourcesCache[name]);
+          wireSqlSourceForm(name);
+          container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       });
       document.querySelectorAll('.sql-src-delete').forEach(btn => {
@@ -814,38 +928,11 @@
           await refresh();
         });
       });
-      document.getElementById('add-sql-source')?.addEventListener('click', async () => {
-        const name           = document.getElementById('new-sql-name').value.trim();
-        const db_type         = document.getElementById('new-sql-dbtype').value;
-        const connection_ref  = document.getElementById('new-sql-connref').value.trim();
-        const es_index        = document.getElementById('new-sql-index').value.trim();
-        const id_column        = document.getElementById('new-sql-idcol').value.trim();
-        const poll_interval_seconds = parseInt(document.getElementById('new-sql-interval').value, 10) || 300;
-        const query           = document.getElementById('new-sql-query').value.trim();
-        const fieldsRaw        = document.getElementById('new-sql-fields').value.trim();
-        const label            = document.getElementById('new-sql-label').value.trim() || null;
-        const description       = document.getElementById('new-sql-description').value.trim() || null;
-
-        if (!name || !connection_ref || !es_index || !id_column || !query || !fieldsRaw) {
-          alert('Tous les champs sont requis (nom, connection_ref, index ES, colonne ID, requête, mapping fields).');
-          return;
-        }
-        let fields;
-        try {
-          fields = JSON.parse(fieldsRaw);
-        } catch (e) {
-          alert(`JSON invalide dans le mapping "fields" : ${e.message}`);
-          return;
-        }
-        try {
-          await api('/admin/sql-sources', {
-            method: 'POST',
-            body: JSON.stringify({ name, db_type, connection_ref, query, id_column, es_index, fields, poll_interval_seconds, label, description }),
-          });
-          await refresh();
-        } catch (e) {
-          alert(`Erreur : ${e.message}`);
-        }
+      document.getElementById('sql-new-source-btn')?.addEventListener('click', () => {
+        const container = document.getElementById('sql-form-container');
+        container.innerHTML = sqlSourceFormHtml(null, null);
+        wireSqlSourceForm(null);
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
 
       document.querySelectorAll('.sql-dsn-delete').forEach(btn => {
