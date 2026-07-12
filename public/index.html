@@ -1467,6 +1467,7 @@
         renderAddToCollectionModal();
       } catch (e) {
         card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+
           <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
       }
     }
@@ -1520,6 +1521,7 @@
         setTimeout(closeCollectionsModal, 1200);
       } catch (e) {
         card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
+
           <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
       }
     }
