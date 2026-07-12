@@ -550,12 +550,18 @@
               <span class="muted">${s.collectable ? 'autorisée' : 'bloquée'}</span>
             </label>
           </td>
+          <td>
+            <select class="src-display-style">
+              <option value="default" ${s.display_style !== 'compact' ? 'selected' : ''}>Détaillé</option>
+              <option value="compact" ${s.display_style === 'compact' ? 'selected' : ''}>Compact</option>
+            </select>
+          </td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th><th>Affichage</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
           </table>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
@@ -635,6 +641,26 @@
             label.textContent = collectable ? 'autorisée' : 'bloquée';
           } catch (err) {
             e.target.checked = !collectable;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('.src-display-style').forEach(sel => {
+        const previous = sel.value;
+        sel.addEventListener('change', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const type = tr.dataset.type;
+          const display_style = e.target.value;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/all-sources/${encodeURIComponent(name)}/display-style?type=${type}`, {
+              method: 'POST', body: JSON.stringify({ display_style }),
+            });
+          } catch (err) {
+            e.target.value = previous;
             alert(`Erreur : ${err.message}`);
           } finally {
             e.target.disabled = false;

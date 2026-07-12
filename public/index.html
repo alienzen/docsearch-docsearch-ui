@@ -117,6 +117,8 @@
 
     .result-card { background: #fff; border: 1px solid #e5e5e0; border-radius: 12px; padding: 16px;
                    margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
+    .result-card-compact { padding: 8px 16px; margin-bottom: 4px; }
+    .result-card-compact .result-header { margin-bottom: 0; cursor: pointer; }
     .result-card:hover { border-color: #85B7EB; box-shadow: 0 2px 8px rgba(24,95,165,0.08); }
     .result-card.kbd-focus { border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.25); }
     .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px;
@@ -594,6 +596,14 @@
       return found ? found.collectable !== false : true;
     }
 
+    // Style de mise en page des résultats de cette source (voir
+    // renderResults()) — repli sur 'default' si absent/inconnu, même
+    // tolérance que les helpers voisins.
+    function sourceDisplayStyle(name) {
+      const found = allSources.find(s => s.name === name);
+      return (found && found.display_style) || 'default';
+    }
+
     function updateSourcesButtonLabel() {
       const btn = document.getElementById('sources-select-toggle');
       if (!btn) return;
@@ -949,75 +959,119 @@
         return;
       }
 
-      box.innerHTML = data.results.map(r => {
-        const ec = EXT_COLORS[r.extension] || { bg: '#F1EFE8', color: '#444441' };
-        const snippets = (r.highlight || []).join(' … ');
-        const scorePct = Math.min(100, Math.round((r.score || 0) * 20));
-        const isArchiveMember = (r.filepath || '').includes('::');
-        const archiveNote = isArchiveMember
-          ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
-          : '';
-        const sourceNote = r.source
-          ? (() => {
-              // Couleur dérivée du nom brut (stable même si le libellé change),
-              // mais texte et initiale affichés basés sur le libellé.
-              const sc = sourceColor(r.source);
-              const label = sourceLabel(r.source);
-              return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
-                <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
-                ${escapeHtml(label)}
-              </span>`;
-            })()
-          : '';
-        // Décalage du corps (métadonnées/chemin/extrait) pour rester aligné
-        // sous le titre — dépend de si la case de sélection précède l'icône.
-        // Absente à la fois si la fonctionnalité est désactivée globalement
-        // ET si la source de CE résultat précis n'autorise pas les
-        // collections (voir sourceCollectable() — /admin/all-sources).
-        const showSelectCb = uiConfigCache.collections_enabled && sourceCollectable(r.source);
-        const bodyIndent = showSelectCb ? 75 : 48;
-        return `
-        <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
-          <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
-            ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
-                     onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
-                     aria-label="Sélectionner ce document" />` : ''}
-            <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
-            <div style="flex:1;min-width:0;">
-              <div class="result-title">${r.title || r.filename}</div>
-            </div>
-            <span class="score-pill">${scorePct}%</span>
-            <span class="result-caret">▾</span>
-          </div>
-          <div class="result-body">
-            <div class="result-meta" style="margin-left:${bodyIndent}px;">
-              ${sourceNote}
-              ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-              <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
-              ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
-              <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
-              ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
-              ${archiveNote}
-            </div>
-            ${r.filepath ? `
-              <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
-                <i class="ti ti-route" aria-hidden="true"></i>
-                <span class="path-text">${r.filepath}</span>
-                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
-                        onclick="copyPathClick(event);"
-                        title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
-                <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
-                        onclick="copyPathClick(event);"
-                        title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
-              </div>` : ''}
-            ${snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
-            <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
-          </div>
-        </div>`;
-      }).join('');
+      // Gabarit de carte par résultat, choisi selon le style d'affichage
+      // configuré pour SA source précise (admin.html, panneau "Toutes les
+      // sources") — voir sourceDisplayStyle().
+      box.innerHTML = data.results.map(r =>
+        sourceDisplayStyle(r.source) === 'compact' ? renderCardCompact(r) : renderCardDefault(r)
+      ).join('');
 
       renderPagination(data.total);
       renderSelectionToolbar();
+    }
+
+    // Case de sélection pour les collections — décalage du corps de carte
+    // (métadonnées/chemin/extrait) pour rester aligné sous le titre selon
+    // qu'elle précède ou non l'icône. Partagé par renderCardDefault et
+    // renderCardCompact.
+    function _showSelectCb(r) {
+      return uiConfigCache.collections_enabled && sourceCollectable(r.source);
+    }
+
+    function renderCardDefault(r) {
+      const ec = EXT_COLORS[r.extension] || { bg: '#F1EFE8', color: '#444441' };
+      const snippets = (r.highlight || []).join(' … ');
+      const scorePct = Math.min(100, Math.round((r.score || 0) * 20));
+      const isArchiveMember = (r.filepath || '').includes('::');
+      const archiveNote = isArchiveMember
+        ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
+        : '';
+      const sourceNote = r.source
+        ? (() => {
+            // Couleur dérivée du nom brut (stable même si le libellé change),
+            // mais texte et initiale affichés basés sur le libellé.
+            const sc = sourceColor(r.source);
+            const label = sourceLabel(r.source);
+            return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
+              <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+              ${escapeHtml(label)}
+            </span>`;
+          })()
+        : '';
+      const showSelectCb = _showSelectCb(r);
+      const bodyIndent = showSelectCb ? 75 : 48;
+      return `
+      <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
+        <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
+          ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+                   onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
+                   aria-label="Sélectionner ce document" />` : ''}
+          <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="result-title">${r.title || r.filename}</div>
+          </div>
+          <span class="score-pill">${scorePct}%</span>
+          <span class="result-caret">▾</span>
+        </div>
+        <div class="result-body">
+          <div class="result-meta" style="margin-left:${bodyIndent}px;">
+            ${sourceNote}
+            ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
+            <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
+            ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
+            <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
+            ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
+            ${archiveNote}
+          </div>
+          ${r.filepath ? `
+            <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
+              <i class="ti ti-route" aria-hidden="true"></i>
+              <span class="path-text">${r.filepath}</span>
+              <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
+                      onclick="copyPathClick(event);"
+                      title="Copier le chemin du dossier" aria-label="Copier le chemin du dossier">${ICON_FOLDER}</button>
+              <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="full"
+                      onclick="copyPathClick(event);"
+                      title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
+            </div>` : ''}
+          ${snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
+          <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
+        </div>
+      </div>`;
+    }
+
+    // Ligne dense : pas de bloc métadonnées/extrait ni d'accordéon, un
+    // clic ouvre directement la fiche détail complète (openDetail) au
+    // lieu de déplier — pour les sources réglées en style "compact"
+    // (admin.html, voir sourceDisplayStyle()).
+    function renderCardCompact(r) {
+      const ec = EXT_COLORS[r.extension] || { bg: '#F1EFE8', color: '#444441' };
+      const scorePct = Math.min(100, Math.round((r.score || 0) * 20));
+      const showSelectCb = _showSelectCb(r);
+      const sourceNote = r.source
+        ? (() => {
+            const sc = sourceColor(r.source);
+            const label = sourceLabel(r.source);
+            return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
+              <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+              ${escapeHtml(label)}
+            </span>`;
+          })()
+        : '';
+      return `
+      <div class="result-card result-card-compact" data-doc-id="${r.id}">
+        <div class="result-header" onclick="openDetail('${r.id}')">
+          ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+                   onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
+                   aria-label="Sélectionner ce document" />` : ''}
+          <div class="ext-icon" style="background:${ec.bg};color:${ec.color};width:26px;height:26px;font-size:9px;">${extLabel(r.extension)}</div>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
+            <span class="result-title" style="margin-bottom:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.filename}</span>
+            ${sourceNote}
+          </div>
+          <span class="score-pill">${scorePct}%</span>
+        </div>
+      </div>`;
     }
 
     // Accordéon des résultats — l'en-tête (icône/titre/score) reste
