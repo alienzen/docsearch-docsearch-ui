@@ -293,6 +293,12 @@
             <div id="facet-authors"><div class="facet-empty">Lancez une recherche</div></div>
           </div>
         </div>
+        <div class="facet-section" id="facet-section-keywords">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-keywords')">Mots-clés<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-keywords"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
+        </div>
         <div class="facet-section" id="facet-section-folders">
           <div class="facet-title" onclick="toggleFacetAccordion('facet-section-folders')">Dossier<span class="facet-caret">▾</span></div>
           <div class="facet-body">
@@ -366,7 +372,7 @@
     // Un chip "Word"/"Excel"/"PowerPoint" doit couvrir à la fois le
     // format moderne et l'ancien format binaire 97-2003 — sinon
     // sélectionner "Word" exclurait silencieusement les .doc.
-    const SEARCH_IN_LABELS = { title: 'Titre', author: 'Auteur', filepath: 'Chemin' };
+    const SEARCH_IN_LABELS = { title: 'Titre', author: 'Auteur', keywords: 'Mots-clés', filepath: 'Chemin' };
     const SORT_LABELS     = { date_modified: 'Date de modification', filename: 'Nom', size: 'Taille' };
 
     const EXT_COLORS = {
@@ -406,7 +412,7 @@
       // valeurs à la fois, combinées en OR côté ES). ext stocke
       // directement les valeurs brutes du champ ES (".pdf", ".docx"...),
       // identiques aux clés retournées par facets.extensions.
-      ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null,
+      ext: [], author: [], keywords: [], folder: [], source: [], dateFrom: null, dateTo: null,
       sort: '_score', page: 1,
       // searchId/resultIds : rattachent le pouce et le tracking de clic
       // à LA recherche qui a produit les résultats actuellement affichés
@@ -661,6 +667,7 @@
         sort: state.sort,
         extension: state.ext.length ? state.ext : null,
         author: state.author,
+        keywords: state.keywords,
         folder: state.folder,
         source: state.source,
         date_from: state.dateFrom,
@@ -669,9 +676,10 @@
     }
 
     // ── Syntaxe avancée de recherche ────────────────────────────
-    // "auteur:", "type:", "source:", "dossier:" (+ alias anglais) dans la
-    // barre de recherche — convertis en filtres cumulatifs (state.author/
-    // ext/source/folder), EXACTEMENT comme un clic sur la facette
+    // "auteur:", "mots-cles:", "type:", "source:", "dossier:" (+ alias
+    // anglais) dans la barre de recherche — convertis en filtres
+    // cumulatifs (state.author/keywords/ext/source/folder), EXACTEMENT
+    // comme un clic sur la facette
     // correspondante : même mécanisme de sélection cumulative, mêmes
     // puces retirables, même correspondance EXACTE (pas de recherche
     // floue — la valeur doit correspondre à ce qu'affiche la facette,
@@ -682,14 +690,18 @@
     // silencieusement supprimé.
     const ADVANCED_QUERY_OPERATORS = {
       auteur: 'author', author: 'author',
+      // Pas d'accent dans les clés : ADVANCED_QUERY_RE ne matche que
+      // [a-zA-Z-]+ avant les ":" (comme "auteur"/"dossier", déjà sans
+      // accent) — "mots-clés:" ne serait jamais reconnu à cause du "é".
+      'mots-cles': 'keywords', motscles: 'keywords', keywords: 'keywords', keyword: 'keywords',
       type: 'ext', ext: 'ext', extension: 'ext',
       source: 'source',
       dossier: 'folder', folder: 'folder',
     };
-    const ADVANCED_QUERY_RE = /\b([a-zA-Z]+):(?:"([^"]*)"|(\S+))/g;
+    const ADVANCED_QUERY_RE = /\b([a-zA-Z-]+):(?:"([^"]*)"|(\S+))/g;
 
     function parseAdvancedQuery(text) {
-      const extracted = { author: [], ext: [], source: [], folder: [] };
+      const extracted = { author: [], keywords: [], ext: [], source: [], folder: [] };
       const remaining = text.replace(ADVANCED_QUERY_RE, (match, key, quoted, bare) => {
         const dim = ADVANCED_QUERY_OPERATORS[key.toLowerCase()];
         if (!dim) return match;
@@ -706,7 +718,7 @@
     // un filtre actif (facette cliquée ou extraite de la syntaxe avancée,
     // ou période) — une recherche à critères tous vides ne part jamais.
     function hasActiveCriteria(q) {
-      return !!q || state.ext.length || state.author.length || state.folder.length ||
+      return !!q || state.ext.length || state.author.length || state.keywords.length || state.folder.length ||
              state.source.length || state.dateFrom || state.dateTo;
     }
 
@@ -714,6 +726,7 @@
       const rawQ = document.getElementById('q').value.trim();
       const { remaining, extracted } = parseAdvancedQuery(rawQ);
       extracted.author.forEach(v => { if (!state.author.includes(v)) state.author.push(v); });
+      extracted.keywords.forEach(v => { if (!state.keywords.includes(v)) state.keywords.push(v); });
       extracted.ext.forEach(v    => { if (!state.ext.includes(v))    state.ext.push(v); });
       extracted.source.forEach(v => { if (!state.source.includes(v)) state.source.push(v); });
       extracted.folder.forEach(v => { if (!state.folder.includes(v)) state.folder.push(v); });
@@ -1139,6 +1152,12 @@
           <span>${f.key}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
         </div>`).join('') || '<div class="facet-empty">Aucun auteur</div>';
 
+      const keywordsBox = document.getElementById('facet-keywords');
+      keywordsBox.innerHTML = (facets.keywords || []).filter(f => f.key).map(f => `
+        <div class="facet-row${state.keywords.includes(f.key) ? ' active' : ''}" data-facet-type="keywords" data-facet-value="${escapeHtml(f.key)}">
+          <span>${escapeHtml(f.key)}</span><span class="facet-count">${f.doc_count.toLocaleString('fr-FR')}</span>
+        </div>`).join('') || '<div class="facet-empty">Aucun mot-clé</div>';
+
       const foldersBox = document.getElementById('facet-folders');
       foldersBox.innerHTML = (facets.folders || []).filter(f => f.key).map(f => `
         <div class="facet-row${state.folder.includes(f.key) ? ' active' : ''}" data-facet-type="folder" data-facet-value="${escapeHtml(f.key)}" title="${escapeHtml(f.key)}">
@@ -1150,7 +1169,7 @@
       // le HTML dès qu'un nom d'auteur/dossier contenait un guillemet,
       // via JSON.stringify() injecté dans un attribut déjà délimité
       // par des guillemets doubles).
-      document.querySelectorAll('#facet-extensions .facet-row, #facet-sources .facet-row, #facet-authors .facet-row, #facet-folders .facet-row').forEach(row => {
+      document.querySelectorAll('#facet-extensions .facet-row, #facet-sources .facet-row, #facet-authors .facet-row, #facet-keywords .facet-row, #facet-folders .facet-row').forEach(row => {
         row.addEventListener('click', () => toggleFacet(row.dataset.facetType, row.dataset.facetValue));
       });
     }
@@ -1159,6 +1178,7 @@
       if (type === 'ext') state.ext = toggleArrayValue(state.ext, value);
       if (type === 'source') state.source = toggleArrayValue(state.source, value);
       if (type === 'author') state.author = toggleArrayValue(state.author, value);
+      if (type === 'keywords') state.keywords = toggleArrayValue(state.keywords, value);
       if (type === 'folder') state.folder = toggleArrayValue(state.folder, value);
       state.page = 1;
       doSearch();
@@ -1179,6 +1199,7 @@
       state.ext.forEach(e => chips.push({ label: 'Type : ' + extLabel(e), clear: () => { state.ext = state.ext.filter(v => v !== e); } }));
       state.source.forEach(s => chips.push({ label: 'Source : ' + s, clear: () => { state.source = state.source.filter(v => v !== s); } }));
       state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
+      state.keywords.forEach(k => chips.push({ label: 'Mot-clé : ' + k, clear: () => { state.keywords = state.keywords.filter(v => v !== k); } }));
       state.folder.forEach(f => chips.push({ label: 'Dossier : ' + f, clear: () => { state.folder = state.folder.filter(v => v !== f); } }));
       if (state.dateFrom || state.dateTo) chips.push({
         label: 'Période : ' + (state.dateFrom || '…') + ' → ' + (state.dateTo || '…'),
@@ -1203,7 +1224,7 @@
     }
 
     function clearAllFilters() {
-      state.ext = []; state.author = []; state.folder = []; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.ext = []; state.author = []; state.keywords = []; state.folder = []; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -1214,7 +1235,7 @@
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
       // elle-même et le tri, et ramène l'affichage à l'état initial
       // (aucune recherche lancée).
-      state = { ext: [], author: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
+      state = { ext: [], author: [], keywords: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
       clearSelection();
 
       document.getElementById('q').value = '';
@@ -1250,6 +1271,7 @@
         query:     q,
         ext:       state.ext,
         author:    state.author,
+        keywords:  state.keywords,
         folder:    state.folder,
         source:    state.source,
         date_from: state.dateFrom,
@@ -1297,6 +1319,8 @@
       if (s.search_in && s.search_in !== 'all') tags.push('Champ : ' + (SEARCH_IN_LABELS[s.search_in] || s.search_in));
       const authorLabel = multiLabel(s.author);
       if (authorLabel) tags.push('Auteur : ' + authorLabel);
+      const keywordsLabel = multiLabel(s.keywords);
+      if (keywordsLabel) tags.push('Mots-clés : ' + keywordsLabel);
       const folderLabel = multiLabel(s.folder);
       if (folderLabel) tags.push('Dossier : ' + folderLabel);
       const sourceLabel = multiLabel(s.source);
@@ -1355,7 +1379,7 @@
       // recherches) — 'all' redevient un tableau vide (pas de filtre).
       const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
       state = {
-        ext: extList, author: toArray(s.author), folder: toArray(s.folder),
+        ext: extList, author: toArray(s.author), keywords: toArray(s.keywords), folder: toArray(s.folder),
         source: toArray(s.source),
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
@@ -1593,6 +1617,11 @@
         `<span class="acl-tag"><i class="ti ti-lock" aria-hidden="true"></i>Groupe : ${g}</span>`
       ).join('');
 
+      const docKeywords = doc.keywords || [];
+      const keywordsHtml = docKeywords.length
+        ? docKeywords.map(k => `<span class="acl-tag">${escapeHtml(k)}</span>`).join('')
+        : '—';
+
       card.innerHTML = `
         <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
         <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;">
@@ -1605,6 +1634,7 @@
         ${previewBanner}
         <div style="margin-top:16px;">
           <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
+          <div class="modal-row"><span class="k"><i class="ti ti-tags" aria-hidden="true"></i>Mots-clés</span><span class="v" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;">${keywordsHtml}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
           <div class="modal-row">
