@@ -205,6 +205,10 @@
     .modal-acl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: #f5f5f3;
                color: #555; display: flex; align-items: center; gap: 5px; }
+    .keyword-remove-btn { flex-shrink: 0; width: 14px; height: 14px; display: inline-flex;
+                           align-items: center; justify-content: center; border-radius: 3px; }
+    .keyword-remove-btn svg { width: 10px; height: 10px; }
+    .keyword-remove-btn:hover { background: #e5e5e0; color: #A32D2D; }
     .modal-preview-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
                          background: #185FA5; color: #fff; border-radius: 8px; text-decoration: none;
                          font-size: 13px; margin-top: 4px; }
@@ -445,7 +449,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -1596,6 +1600,20 @@
       }
     }
 
+    // Rafraîchit une modale DÉJÀ OUVERTE (après ajout/retrait d'un
+    // mot-clé) sans repasser par l'état "Chargement…" d'openDetail() —
+    // celui-ci vidait puis remplissait la modale à chaque appel, visible
+    // comme un flash désormais que la requête est quasi instantanée
+    // (refresh=True côté API, voir search_api.py).
+    async function refreshDetail(id) {
+      try {
+        const doc = await api('/document/' + id);
+        renderDetail(doc, id);
+      } catch (e) {
+        alert("Impossible de rafraîchir le document : " + e.message);
+      }
+    }
+
     function renderDetail(doc, id) {
       const card = document.getElementById('modal-card');
       const ec = EXT_COLORS[doc.extension] || { bg: '#F1EFE8', color: '#444441' };
@@ -1617,10 +1635,26 @@
         `<span class="acl-tag"><i class="ti ti-lock" aria-hidden="true"></i>Groupe : ${g}</span>`
       ).join('');
 
+      // Édition des mots-clés réservée aux documents de type fichier
+      // ("document"/"archive_member" — pas email/web/SQL) et à la
+      // bascule admin custom_keywords_enabled (voir ui_config.py).
+      const canEditKeywords = uiConfigCache.custom_keywords_enabled
+        && (doc.type === 'document' || doc.type === 'archive_member');
       const docKeywords = doc.keywords || [];
-      const keywordsHtml = docKeywords.length
-        ? docKeywords.map(k => `<span class="acl-tag">${escapeHtml(k)}</span>`).join('')
-        : '—';
+      const keywordsTagsHtml = docKeywords.map(k => canEditKeywords
+        ? `<span class="acl-tag">${escapeHtml(k)}<button class="keyword-remove-btn" data-keyword="${escapeHtml(k)}"
+             onclick="removeDocKeyword('${id}', this.dataset.keyword)" title="Retirer ce mot-clé" aria-label="Retirer ce mot-clé"
+             style="margin-left:2px;border:none;background:none;cursor:pointer;color:inherit;padding:0;">${ICON_X}</button></span>`
+        : `<span class="acl-tag">${escapeHtml(k)}</span>`
+      ).join('');
+      const keywordsAddHtml = canEditKeywords ? `
+        <div style="display:flex;gap:6px;width:100%;">
+          <input type="text" id="new-keyword-input" placeholder="Ajouter un ou plusieurs mots-clés (séparés par ;)…"
+                 style="flex:1;padding:4px 8px;border:1px solid #d5d5ce;border-radius:6px;font-size:12px;"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addDocKeyword('${id}');}" />
+          <button class="secondary" onclick="addDocKeyword('${id}')" style="padding:4px 10px;font-size:12px;">Ajouter</button>
+        </div>` : '';
+      const keywordsHtml = docKeywords.length ? keywordsTagsHtml : (canEditKeywords ? '' : '—');
 
       card.innerHTML = `
         <button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
@@ -1634,7 +1668,13 @@
         ${previewBanner}
         <div style="margin-top:16px;">
           <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
-          <div class="modal-row"><span class="k"><i class="ti ti-tags" aria-hidden="true"></i>Mots-clés</span><span class="v" style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;">${keywordsHtml}</span></div>
+          <div class="modal-row" style="align-items:flex-start;">
+            <span class="k"><i class="ti ti-tags" aria-hidden="true"></i>Mots-clés</span>
+            <span class="v" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <span style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;">${keywordsHtml}</span>
+              ${keywordsAddHtml}
+            </span>
+          </div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
           <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
           <div class="modal-row">
@@ -1665,6 +1705,39 @@
 
     function closeModal() {
       document.getElementById('modal-overlay').classList.remove('open');
+    }
+
+    // ── Mots-clés personnalisés ─────────────────────────────────────
+    // Rappelle refreshDetail(id) après succès pour tout rafraîchir depuis
+    // l'API plutôt que de patcher le DOM localement — sans repasser par
+    // l'état "Chargement…" d'openDetail (voir refreshDetail ci-dessus).
+    async function addDocKeyword(id) {
+      const input = document.getElementById('new-keyword-input');
+      // Plusieurs mots-clés séparés par ";" en une seule saisie (même
+      // séparateur que get_keywords() côté indexer.py pour les métadonnées
+      // Tika). Un par un, SÉQUENTIELLEMENT (pas Promise.all) : add_keyword()
+      // fait un lire-modifier-écrire sur le même document custom_keywords
+      // — en parallèle, deux requêtes liraient le même état de départ et la
+      // dernière écriture effacerait l'ajout de l'autre.
+      const keywords = (input?.value || '').split(';').map(k => k.trim()).filter(Boolean);
+      if (!keywords.length) return;
+      try {
+        for (const keyword of keywords) {
+          await api(`/document/${id}/keywords`, { method: 'POST', body: JSON.stringify({ keyword }) });
+        }
+        refreshDetail(id);
+      } catch (e) {
+        alert("Impossible d'ajouter ce(s) mot(s)-clé(s) : " + e.message);
+      }
+    }
+
+    async function removeDocKeyword(id, keyword) {
+      try {
+        await api(`/document/${id}/keywords/${encodeURIComponent(keyword)}`, { method: 'DELETE' });
+        refreshDetail(id);
+      } catch (e) {
+        alert("Impossible de retirer ce mot-clé : " + e.message);
+      }
     }
 
     // ── Raccourcis clavier ────────────────────────────────────────

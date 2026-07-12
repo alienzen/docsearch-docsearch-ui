@@ -434,6 +434,12 @@
               <input type="checkbox" id="ui-lists" ${cfg.collections_enabled ? 'checked' : ''} />
               Sélection de documents et collections personnelles ("📋 Mes collections")
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-custom-keywords" ${cfg.custom_keywords_enabled ? 'checked' : ''} />
+              Ajout/retrait de mots-clés personnalisés sur les documents (type fichier)
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -488,6 +494,15 @@
         const checked = e.target.checked;
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ collections_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-custom-keywords')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ custom_keywords_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
           alert(`Erreur : ${err.message}`);
