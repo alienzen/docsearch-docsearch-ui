@@ -454,8 +454,22 @@
     // Libellés des facettes personnalisées de la DERNIÈRE recherche —
     // rempli par renderFacets(), lu par renderActiveFilters() pour
     // composer les puces (ex: "Bureau : Paris") sans redemander le
-    // libellé au serveur à chaque clic.
+    // libellé au serveur à chaque clic. Pré-rempli une première fois par
+    // loadCustomFacetOperators() au chargement de la page (voir
+    // ci-dessous), pour que la toute première puce affiche déjà le bon
+    // libellé plutôt que le nom de champ ES brut — renderFacets() écrase
+    // ensuite ces valeurs à chaque recherche avec les facettes réellement
+    // actives, sans perte : les deux sources partagent le même format.
     let customFacetLabels = {};
+
+    // {es_field en minuscules: es_field} — TOUTES les facettes SQL
+    // personnalisées actives, toutes sources cherchables confondues (pas
+    // seulement celles de la dernière recherche, contrairement à
+    // customFacetLabels ci-dessus) — permet à la syntaxe avancée de la
+    // barre de recherche (ex: "bureau:Paris") de reconnaître un opérateur
+    // personnalisé dès le chargement de la page, avant même une première
+    // recherche. Voir loadCustomFacetOperators() et parseAdvancedQuery().
+    let customFacetOperators = {};
 
     // Lu une fois au chargement — dit si le pouce/le NPS/les suggestions
     // doivent être affichés (suspendables depuis l'admin, voir
@@ -622,6 +636,27 @@
       updateSourcesButtonLabel();
     }
 
+    async function loadCustomFacetOperators() {
+      try {
+        const fields = await api('/custom-facets');   // {es_field: label}
+        customFacetOperators = {};
+        Object.keys(fields).forEach(field => { customFacetOperators[field.toLowerCase()] = field; });
+        // Pré-remplit customFacetLabels (voir sa déclaration) pour que la
+        // toute première puce, avant toute recherche, affiche déjà le bon
+        // libellé — sans écraser des libellés éventuellement déjà posés
+        // par une recherche entre-temps (ordre d'arrivée réseau non
+        // garanti, cet appel est lancé en parallèle des autres au
+        // chargement de la page).
+        Object.entries(fields).forEach(([field, label]) => {
+          if (!(field in customFacetLabels)) customFacetLabels[field] = label;
+        });
+      } catch (e) {
+        // Échec silencieux (API indisponible) : la syntaxe avancée
+        // reconnaît simplement moins d'opérateurs — les facettes cliquées
+        // depuis la sidebar (après une recherche) continuent de fonctionner.
+      }
+    }
+
     // Libellé d'affichage d'une source à partir de son nom (clé de
     // registre) — repli sur le nom brut si la source n'est pas (encore)
     // dans allSources (ex: chargement de /searchable-sources en échec).
@@ -747,27 +782,44 @@
     // espaces (auteur:"Jean Dupont"). Un opérateur non reconnu (ex:
     // "foo:bar") est laissé tel quel dans le texte libre plutôt que
     // silencieusement supprimé.
+    //
+    // Ces opérateurs fixes sont volontairement prioritaires sur les
+    // facettes SQL personnalisées dynamiques (customFacetOperators,
+    // ci-dessous) : une source qui déclarerait par mégarde un champ
+    // "source" ou "type" ne doit jamais pouvoir masquer ces dimensions
+    // core, communes à toutes les installations.
     const ADVANCED_QUERY_OPERATORS = {
       auteur: 'author', author: 'author',
       // Pas d'accent dans les clés : ADVANCED_QUERY_RE ne matche que
-      // [a-zA-Z-]+ avant les ":" (comme "auteur"/"dossier", déjà sans
+      // [a-zA-Z0-9_-]+ avant les ":" (comme "auteur"/"dossier", déjà sans
       // accent) — "mots-clés:" ne serait jamais reconnu à cause du "é".
       'mots-cles': 'keywords', motscles: 'keywords', keywords: 'keywords', keyword: 'keywords',
       type: 'ext', ext: 'ext', extension: 'ext',
       source: 'source',
       dossier: 'folder', folder: 'folder',
     };
-    const ADVANCED_QUERY_RE = /\b([a-zA-Z-]+):(?:"([^"]*)"|(\S+))/g;
+    // Chiffres et underscore en plus des lettres/tiret (par rapport aux
+    // seuls opérateurs fixes ci-dessus) : les noms de champ ES des
+    // facettes SQL personnalisées (customFacetOperators) suivent des
+    // conventions de nommage plus larges (ex: "num_tel") que les
+    // opérateurs fixes d'origine.
+    const ADVANCED_QUERY_RE = /\b([a-zA-Z0-9_-]+):(?:"([^"]*)"|(\S+))/g;
 
     function parseAdvancedQuery(text) {
-      const extracted = { author: [], keywords: [], ext: [], source: [], folder: [] };
+      const extracted = { author: [], keywords: [], ext: [], source: [], folder: [], custom: {} };
       const remaining = text.replace(ADVANCED_QUERY_RE, (match, key, quoted, bare) => {
-        const dim = ADVANCED_QUERY_OPERATORS[key.toLowerCase()];
-        if (!dim) return match;
+        const lowerKey = key.toLowerCase();
+        const dim = ADVANCED_QUERY_OPERATORS[lowerKey];
+        const customField = dim ? null : customFacetOperators[lowerKey];
+        if (!dim && !customField) return match;
         let value = (quoted !== undefined ? quoted : bare).trim();
         if (!value) return match;
         if (dim === 'ext') value = (value.startsWith('.') ? value : '.' + value).toLowerCase();
-        extracted[dim].push(value);
+        if (dim) {
+          extracted[dim].push(value);
+        } else {
+          (extracted.custom[customField] = extracted.custom[customField] || []).push(value);
+        }
         return '';
       }).replace(/\s+/g, ' ').trim();
       return { remaining, extracted };
@@ -790,6 +842,11 @@
       extracted.ext.forEach(v    => { if (!state.ext.includes(v))    state.ext.push(v); });
       extracted.source.forEach(v => { if (!state.source.includes(v)) state.source.push(v); });
       extracted.folder.forEach(v => { if (!state.folder.includes(v)) state.folder.push(v); });
+      Object.entries(extracted.custom).forEach(([field, values]) => {
+        const current = state.custom[field] || [];
+        values.forEach(v => { if (!current.includes(v)) current.push(v); });
+        state.custom[field] = current;
+      });
       // La barre ne garde que le texte libre restant — les opérateurs
       // reconnus deviennent des puces de filtre (voir renderActiveFilters),
       // seule source de vérité ensuite (les retirer via leur puce ✕ ne
@@ -2149,6 +2206,7 @@
     loadUiConfig().then(refreshAlertsBadge);
     loadIsAdmin();
     loadSearchableSources();
+    loadCustomFacetOperators();
     loadDisplayStyles();
     applyCollapsedFacets();
     updateCompactToggleLabel();

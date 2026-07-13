@@ -66,6 +66,7 @@
         <thead><tr><th>Opérateur</th><th>Exemple</th><th>Équivaut à</th></tr></thead>
         <tbody>
           <tr><td><code>auteur:</code></td><td><code>auteur:"Jean Dupont"</code></td><td>Facette Auteur</td></tr>
+          <tr><td><code>mots-cles:</code></td><td><code>mots-cles:urgent</code></td><td>Facette Mots-clés</td></tr>
           <tr><td><code>type:</code></td><td><code>type:pdf</code></td><td>Facette Type de fichier</td></tr>
           <tr><td><code>source:</code></td><td><code>source:documents</code></td><td>Facette Source</td></tr>
           <tr><td><code>dossier:</code></td><td><code>dossier:Finance</code></td><td>Facette Dossier</td></tr>
@@ -74,6 +75,13 @@
       <p class="muted">La valeur peut tenir en un seul mot (<code>type:pdf</code>) ou être entre
          guillemets si elle contient des espaces (<code>auteur:"Jean Dupont"</code>). Un opérateur
          seul, sans texte libre, cherche tous les documents correspondant à ce filtre.</p>
+
+      <h3>Facettes personnalisées</h3>
+      <p>Certaines sources (bases de données SQL) ajoutent leurs propres facettes — elles
+         deviennent automatiquement des opérateurs supplémentaires, reconnus par leur nom de champ
+         (visible dans la colonne de gauche une fois une facette de ce type dépliée). Sur cette
+         installation par exemple : <code>bureau:Paris</code> ou <code>fonction:"Chef de service"</code>.
+         Mêmes règles que ci-dessus (correspondance exacte, guillemets si espaces).</p>
 
       <h2>Besoin d'aide ?</h2>
       <p>Contactez l'équipe technique pour toute question sur l'utilisation de DocSearch.</p>
