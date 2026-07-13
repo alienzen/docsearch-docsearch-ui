@@ -311,6 +311,7 @@
             <div id="facet-folders"><div class="facet-empty">Lancez une recherche</div></div>
           </div>
         </div>
+        <div id="facet-custom-container"></div>
         <button class="clear-link" id="clear-all" style="display:none;" onclick="clearAllFilters()">
           Effacer tous les filtres
         </button>
@@ -419,6 +420,13 @@
       // directement les valeurs brutes du champ ES (".pdf", ".docx"...),
       // identiques aux clés retournées par facets.extensions.
       ext: [], author: [], keywords: [], folder: [], source: [], dateFrom: null, dateTo: null,
+      // custom : facettes propres à une source SQL (ex: "Bureau"/"Fonction"
+      // pour la source "agents"), voir search_api.py:_active_custom_facets()
+      // — {es_field: [valeurs sélectionnées]}, même sélection cumulative
+      // que les facettes fixes ci-dessus. Les sections correspondantes de
+      // la sidebar apparaissent/disparaissent dynamiquement selon la ou
+      // les sources en jeu (voir renderFacets()).
+      custom: {},
       sort: '_score', page: 1,
       // searchId/resultIds : rattachent le pouce et le tracking de clic
       // à LA recherche qui a produit les résultats actuellement affichés
@@ -429,6 +437,12 @@
       // par resetSearch() (comme collapsedFacets pour les facettes).
       resultsCompact: loadCompactPreference(),
     };
+
+    // Libellés des facettes personnalisées de la DERNIÈRE recherche —
+    // rempli par renderFacets(), lu par renderActiveFilters() pour
+    // composer les puces (ex: "Bureau : Paris") sans redemander le
+    // libellé au serveur à chaque clic.
+    let customFacetLabels = {};
 
     // Lu une fois au chargement — dit si le pouce/le NPS/les suggestions
     // doivent être affichés (suspendables depuis l'admin, voir
@@ -700,6 +714,7 @@
         keywords: state.keywords,
         folder: state.folder,
         source: state.source,
+        custom: state.custom,
         date_from: state.dateFrom,
         date_to: state.dateTo,
       };
@@ -749,7 +764,8 @@
     // ou période) — une recherche à critères tous vides ne part jamais.
     function hasActiveCriteria(q) {
       return !!q || state.ext.length || state.author.length || state.keywords.length || state.folder.length ||
-             state.source.length || state.dateFrom || state.dateTo;
+             state.source.length || state.dateFrom || state.dateTo ||
+             Object.values(state.custom).some(values => values.length);
     }
 
     async function doSearch() {
@@ -1049,6 +1065,7 @@
               ${fields.has('size') ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-file" aria-hidden="true"></i> ${fmtSize(r.size)}</span>` : ''}
               ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-lock" aria-hidden="true"></i> ${r.acl.groups[0]}</span>` : ''}
               ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-phone" aria-hidden="true"></i> ${r.telephone}</span>` : ''}
+              ${fields.has('bureau') && r.bureau ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-building" aria-hidden="true"></i> ${r.bureau}</span>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
           </div>
@@ -1084,6 +1101,7 @@
             ${fields.has('size') ? `<span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>` : ''}
             ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
             ${fields.has('telephone') && r.telephone ? `<span><i class="ti ti-phone" aria-hidden="true"></i>${r.telephone}</span>` : ''}
+            ${fields.has('bureau') && r.bureau ? `<span><i class="ti ti-building" aria-hidden="true"></i>${r.bureau}</span>` : ''}
             ${archiveNote}
           </div>
           ${fields.has('filepath') && r.filepath ? `
@@ -1098,7 +1116,7 @@
                       title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
             </div>` : ''}
           ${fields.has('snippet') && snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
-          <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
+          ${fields.has('detail_button') ? `<button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>` : ''}
         </div>
       </div>`;
     }
@@ -1259,6 +1277,49 @@
       document.querySelectorAll('#facet-extensions .facet-row, #facet-sources .facet-row, #facet-authors .facet-row, #facet-keywords .facet-row, #facet-folders .facet-row').forEach(row => {
         row.addEventListener('click', () => toggleFacet(row.dataset.facetType, row.dataset.facetValue));
       });
+
+      renderCustomFacets(facets.custom || {});
+    }
+
+    // ── Facettes personnalisées par source (ex: "Bureau"/"Fonction" pour
+    // la source "agents", voir sql_sources_config.py:FieldMapping.facet)
+    // ─────────────────────────────────────────────────────────────────
+    // Contrairement aux 5 facettes fixes ci-dessus (sections déjà présentes
+    // dans le HTML, seul leur contenu est rebâti à chaque recherche), les
+    // sections elles-mêmes n'existent pas d'avance : leur ensemble dépend
+    // de la ou des sources actuellement en jeu. On reconstruit donc
+    // entièrement #facet-custom-container à chaque recherche plutôt que
+    // de diffing — une section dont le champ n'est plus dans `facets.custom`
+    // (ex: source changée) disparaît naturellement, sans code de retrait
+    // séparé.
+    function renderCustomFacets(customFacets) {
+      const container = document.getElementById('facet-custom-container');
+      customFacetLabels = {};
+      container.innerHTML = Object.entries(customFacets).map(([field, def]) => {
+        customFacetLabels[field] = def.label || field;
+        const sectionId = `facet-section-custom-${field}`;
+        const selected = state.custom[field] || [];
+        const rows = (def.buckets || []).filter(b => b.key !== undefined && b.key !== null && b.key !== '').map(b => `
+          <div class="facet-row${selected.includes(String(b.key)) ? ' active' : ''}" data-facet-field="${escapeHtml(field)}" data-facet-value="${escapeHtml(String(b.key))}">
+            <span>${escapeHtml(String(b.key))}</span><span class="facet-count">${b.doc_count.toLocaleString('fr-FR')}</span>
+          </div>`).join('') || '<div class="facet-empty">Aucune valeur</div>';
+        return `
+        <div class="facet-section${collapsedFacets.has(sectionId) ? ' collapsed' : ''}" id="${sectionId}">
+          <div class="facet-title" onclick="toggleFacetAccordion('${sectionId}')">${escapeHtml(customFacetLabels[field])}<span class="facet-caret">▾</span></div>
+          <div class="facet-body"><div>${rows}</div></div>
+        </div>`;
+      }).join('');
+
+      container.querySelectorAll('.facet-row').forEach(row => {
+        row.addEventListener('click', () => toggleCustomFacet(row.dataset.facetField, row.dataset.facetValue));
+      });
+    }
+
+    function toggleCustomFacet(field, value) {
+      state.custom[field] = toggleArrayValue(state.custom[field] || [], value);
+      if (!state.custom[field].length) delete state.custom[field];
+      state.page = 1;
+      doSearch();
     }
 
     function toggleFacet(type, value) {
@@ -1288,6 +1349,15 @@
       state.author.forEach(a => chips.push({ label: 'Auteur : ' + a, clear: () => { state.author = state.author.filter(v => v !== a); } }));
       state.keywords.forEach(k => chips.push({ label: 'Mot-clé : ' + k, clear: () => { state.keywords = state.keywords.filter(v => v !== k); } }));
       state.folder.forEach(f => chips.push({ label: 'Dossier : ' + f, clear: () => { state.folder = state.folder.filter(v => v !== f); } }));
+      Object.entries(state.custom).forEach(([field, values]) => {
+        values.forEach(v => chips.push({
+          label: (customFacetLabels[field] || field) + ' : ' + v,
+          clear: () => {
+            state.custom[field] = (state.custom[field] || []).filter(x => x !== v);
+            if (!state.custom[field].length) delete state.custom[field];
+          }
+        }));
+      });
       if (state.dateFrom || state.dateTo) chips.push({
         label: 'Période : ' + (state.dateFrom || '…') + ' → ' + (state.dateTo || '…'),
         clear: () => {
@@ -1311,7 +1381,7 @@
     }
 
     function clearAllFilters() {
-      state.ext = []; state.author = []; state.keywords = []; state.folder = []; state.source = []; state.dateFrom = null; state.dateTo = null; state.page = 1;
+      state.ext = []; state.author = []; state.keywords = []; state.folder = []; state.source = []; state.custom = {}; state.dateFrom = null; state.dateTo = null; state.page = 1;
       document.getElementById('date-from').value = '';
       document.getElementById('date-to').value = '';
       doSearch();
@@ -1322,7 +1392,8 @@
       // ne touche qu'aux facettes/période), ceci efface aussi la requête
       // elle-même et le tri, et ramène l'affichage à l'état initial
       // (aucune recherche lancée).
-      state = { ext: [], author: [], keywords: [], folder: [], source: [], dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
+      state = { ext: [], author: [], keywords: [], folder: [], source: [], custom: {}, dateFrom: null, dateTo: null, sort: '_score', page: 1, searchId: null, resultIds: [], resultsCompact: state.resultsCompact };
+      customFacetLabels = {};
       clearSelection();
 
       document.getElementById('q').value = '';
@@ -1342,6 +1413,7 @@
       document.getElementById('facet-sources').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-authors').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
       document.getElementById('facet-folders').innerHTML = '<div class="facet-empty">Lancez une recherche</div>';
+      document.getElementById('facet-custom-container').innerHTML = '';
       document.getElementById('clear-all').style.display = 'none';
       updateSourcesButtonLabel();
     }
@@ -1361,6 +1433,7 @@
         keywords:  state.keywords,
         folder:    state.folder,
         source:    state.source,
+        custom:    state.custom,
         date_from: state.dateFrom,
         date_to:   state.dateTo,
         sort:      state.sort,
@@ -1412,6 +1485,12 @@
       if (folderLabel) tags.push('Dossier : ' + folderLabel);
       const sourceLabel = multiLabel(s.source);
       if (sourceLabel) tags.push('Source : ' + sourceLabel);
+      // Pas de libellé humain disponible hors d'une recherche en cours
+      // (voir customFacetLabels, rempli par renderFacets()) — le nom brut
+      // du champ ES sert de repli, largement suffisant pour un résumé.
+      if (s.custom) Object.entries(s.custom).forEach(([field, values]) => {
+        if (values && values.length) tags.push((customFacetLabels[field] || field) + ' : ' + values.join(', '));
+      });
       if (s.date_from || s.date_to) tags.push('Période : ' + (s.date_from || '…') + ' → ' + (s.date_to || '…'));
       if (s.sort && s.sort !== '_score') tags.push('Tri : ' + (SORT_LABELS[s.sort] || s.sort));
       return tags;
@@ -1467,7 +1546,7 @@
       const extList = Array.isArray(s.ext) ? s.ext : (s.ext && s.ext !== 'all' ? [s.ext] : []);
       state = {
         ext: extList, author: toArray(s.author), keywords: toArray(s.keywords), folder: toArray(s.folder),
-        source: toArray(s.source),
+        source: toArray(s.source), custom: s.custom || {},
         dateFrom: s.date_from || null, dateTo: s.date_to || null,
         sort: s.sort || '_score', page: 1,
       };

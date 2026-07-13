@@ -524,7 +524,7 @@
     const DISPLAY_FIELD_LABELS = {
       source: 'Source', author: 'Auteur', date_modified: 'Date', folder: 'Dossier',
       size: 'Taille', acl_group: 'Groupe ACL', filepath: 'Chemin', snippet: 'Extrait',
-      telephone: 'Téléphone',
+      telephone: 'Téléphone', bureau: 'Bureau', detail_button: 'Bouton "Voir le détail complet"',
     };
 
     async function renderDisplayStyles() {
@@ -854,21 +854,25 @@
         api('/admin/sql-sources'),
         api('/admin/sql-dsns'),
       ]);
-      const rows = Object.entries(sqlSourcesCache).map(([name, s]) => `
+      const rows = Object.entries(sqlSourcesCache).map(([name, s]) => {
+        const facetLabels = (s.fields || []).filter(f => f.facet).map(f => f.facet_label || f.es_field);
+        return `
         <tr data-name="${name}">
           <td>${name}</td>
           <td>${s.label || ''}</td>
           <td>${s.es_index}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
           <td class="muted">${s.description || ''}</td>
+          <td class="muted">${facetLabels.map(escapeHtml).join(', ') || '—'}</td>
           <td><button class="secondary sql-src-edit">Modifier</button></td>
           <td><button class="danger sql-src-delete">Retirer</button></td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Intervalle</th><th>Description</th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="muted">Aucune source SQL.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Intervalle</th><th>Description</th><th>Facettes</th><th></th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source SQL.</td></tr>'}</tbody>
           </table>
 
           <div id="sql-form-container" style="margin-top:14px;"></div>
@@ -909,16 +913,27 @@
 
     // Une ligne du tableau de mapping colonne SQL -> champ ES. `f` peut
     // être partiel/vide (nouvelle ligne ajoutée par l'utilisateur).
+    // "Facette" : affiche ce champ comme facette dans la sidebar de
+    // recherche (index.html) dès que cette source est en jeu — voir
+    // search_api.py:_active_custom_facets(). Seuls keyword/boolean le
+    // permettent (agrégation "terms" sans doc_values sinon impossible),
+    // d'où la case désactivée pour les autres types (voir wireSqlSourceForm).
     function sqlFieldRowHtml(f) {
       f = f || {};
       const typeOptions = SQL_ES_TYPES.map(t =>
         `<option value="${t}" ${f.es_type === t ? 'selected' : ''}>${t}</option>`).join('');
+      const facetable = !f.es_type || f.es_type === 'keyword' || f.es_type === 'boolean';
       return `
         <tr class="sql-field-row">
           <td><input type="text" class="sql-field-column" value="${escapeHtml(f.column || '')}" placeholder="colonne SQL" /></td>
           <td><input type="text" class="sql-field-esfield" value="${escapeHtml(f.es_field || '')}" placeholder="champ ES" /></td>
           <td><select class="sql-field-estype">${typeOptions}</select></td>
           <td><input type="text" class="sql-field-analyzer" value="${escapeHtml(f.analyzer || '')}" placeholder="ex: french (texte seul.)" /></td>
+          <td style="text-align:center;">
+            <input type="checkbox" class="sql-field-facet" ${f.facet ? 'checked' : ''} ${facetable ? '' : 'disabled'}
+                   title="Afficher ce champ comme facette de recherche (keyword/boolean uniquement)" />
+          </td>
+          <td><input type="text" class="sql-field-facet-label" value="${escapeHtml(f.facet_label || '')}" placeholder="libellé (ex: Bureau)" /></td>
           <td><button type="button" class="danger sql-field-remove-row" title="Retirer cette colonne">✕</button></td>
         </tr>`;
     }
@@ -958,7 +973,7 @@
 
           <h4 style="margin:16px 0 8px;">Mapping colonnes → champs Elasticsearch</h4>
           <table>
-            <thead><tr><th>Colonne SQL</th><th>Champ ES</th><th>Type ES</th><th>Analyseur</th><th></th></tr></thead>
+            <thead><tr><th>Colonne SQL</th><th>Champ ES</th><th>Type ES</th><th>Analyseur</th><th>Facette</th><th>Libellé facette</th><th></th></tr></thead>
             <tbody id="sql-fields-rows">${fields.map(sqlFieldRowHtml).join('')}</tbody>
           </table>
           <button type="button" class="secondary" id="sql-add-field-row" style="margin-top:8px;">+ Ajouter une colonne</button>
@@ -969,6 +984,9 @@
             la variable d'environnement reste TOUJOURS prioritaire si elle existe. Le DSN en clair ne
             transite jamais par ici ni par Redis dans le premier cas ; dans le second, il est chiffré avant
             stockage. "Analyseur" n'a de sens que pour le type "text" (ex: french) — laisser vide sinon.
+            "Facette" ajoute une section de filtre dans la sidebar de recherche dès que cette source est
+            interrogée (limité aux types keyword/boolean) ; "Libellé facette" est le titre affiché
+            (ex: "Bureau") — vide, le nom du champ ES est utilisé tel quel.
           </p>
 
           <div style="display:flex;gap:8px;margin-top:8px;">
@@ -985,6 +1003,19 @@
       document.querySelectorAll('.sql-field-remove-row').forEach(btn => {
         btn.addEventListener('click', (e) => e.target.closest('tr').remove());
       });
+      // Délégation (plutôt qu'un ré-attachement par ligne) : couvre aussi
+      // les lignes ajoutées après coup via "+ Ajouter une colonne", sans
+      // avoir à re-wirer quoi que ce soit à chaque ajout. Un champ "text"
+      // n'accepte pas de facette (voir sql_sources_config.py:
+      // _validate_fields) — la case est désactivée et décochée dès que le
+      // type choisi sort de keyword/boolean.
+      document.getElementById('sql-fields-rows')?.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('sql-field-estype')) return;
+        const facetCb = e.target.closest('tr').querySelector('.sql-field-facet');
+        const facetable = e.target.value === 'keyword' || e.target.value === 'boolean';
+        facetCb.disabled = !facetable;
+        if (!facetable) facetCb.checked = false;
+      });
       document.getElementById('sql-form-cancel')?.addEventListener('click', () => {
         document.getElementById('sql-form-container').innerHTML = '';
       });
@@ -1000,11 +1031,13 @@
         const description = document.getElementById('sql-form-description').value.trim() || null;
 
         const fields = Array.from(document.querySelectorAll('#sql-fields-rows .sql-field-row')).map(row => {
-          const column   = row.querySelector('.sql-field-column').value.trim();
-          const es_field = row.querySelector('.sql-field-esfield').value.trim();
-          const es_type  = row.querySelector('.sql-field-estype').value;
-          const analyzer = row.querySelector('.sql-field-analyzer').value.trim() || null;
-          return { column, es_field, es_type, analyzer };
+          const column      = row.querySelector('.sql-field-column').value.trim();
+          const es_field    = row.querySelector('.sql-field-esfield').value.trim();
+          const es_type     = row.querySelector('.sql-field-estype').value;
+          const analyzer    = row.querySelector('.sql-field-analyzer').value.trim() || null;
+          const facet       = row.querySelector('.sql-field-facet').checked;
+          const facet_label = row.querySelector('.sql-field-facet-label').value.trim() || null;
+          return { column, es_field, es_type, analyzer, facet, facet_label };
         }).filter(f => f.column && f.es_field);
 
         if (!name || !connection_ref || !es_index || !id_column || !query || !fields.length) {
