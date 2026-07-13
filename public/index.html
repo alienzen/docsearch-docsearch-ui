@@ -73,6 +73,15 @@
                           width: 22px; height: 22px; border-radius: 5px; display: inline-flex;
                           align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
     .saved-item-delete:hover { background: #fff0f0; color: #c92a2a; }
+    .saved-item-alert { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: default; }
+    .alert-toggle-label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #666;
+                           cursor: pointer; white-space: nowrap; }
+    .alert-frequency { font-size: 11px; color: #666; border: 1px solid #e5e5e0; border-radius: 5px;
+                        padding: 1px 4px; background: #fff; }
+    .alerts-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px;
+                    height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 99px; background: #c92a2a;
+                    color: #fff; font-size: 10px; font-weight: 700; line-height: 1; vertical-align: middle; }
+    .alert-item { cursor: pointer; }
 
     .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; width: 100%; flex: 1; }
     .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; min-height: 24px; }
@@ -257,6 +266,10 @@
       <div class="saved-wrap" id="collections-wrap" style="display:none;">
         <button class="saved-toggle" onclick="toggleMyCollectionsPanel()">📋 Mes collections</button>
         <div class="saved-panel" id="collections-panel"></div>
+      </div>
+      <div class="saved-wrap" id="alerts-wrap" style="display:none;">
+        <button class="saved-toggle" onclick="toggleAlertsPanel()">🔔 Alertes<span class="alerts-badge" id="alerts-badge" style="display:none;"></span></button>
+        <div class="saved-panel" id="alerts-panel"></div>
       </div>
       <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
       <a href="/help" id="help-link" target="_blank" style="color:#185FA5;">❓ Aide</a>
@@ -465,7 +478,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -492,6 +505,7 @@
       document.getElementById('help-link').style.display = uiConfigCache.help_enabled ? '' : 'none';
       document.getElementById('collections-wrap').style.display = uiConfigCache.collections_enabled ? '' : 'none';
       if (!uiConfigCache.collections_enabled) clearSelection();
+      document.getElementById('alerts-wrap').style.display = uiConfigCache.alerts_enabled ? '' : 'none';
       updateAdminLinksVisibility();
     }
 
@@ -1510,6 +1524,16 @@
             <div class="saved-item-name">${escapeHtml(s.name)}</div>
             <div class="saved-item-query">« ${escapeHtml(s.query)} »</div>
             ${crit.length ? `<div class="saved-item-criteria">${crit.map(t => `<span class="saved-crit-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+            <div class="saved-item-alert">
+              <label class="alert-toggle-label">
+                <input type="checkbox" class="alert-toggle" ${s.alert_enabled ? 'checked' : ''} />
+                🔔 M'alerter
+              </label>
+              <select class="alert-frequency" ${s.alert_enabled ? '' : 'disabled'}>
+                <option value="daily" ${s.alert_frequency !== 'weekly' ? 'selected' : ''}>tous les jours</option>
+                <option value="weekly" ${s.alert_frequency === 'weekly' ? 'selected' : ''}>toutes les semaines</option>
+              </select>
+            </div>
           </div>
           <button class="saved-item-delete" title="Supprimer" aria-label="Supprimer">✕</button>
         </div>`;
@@ -1528,6 +1552,122 @@
           } catch (err) {
             alert('Impossible de supprimer : ' + err.message);
           }
+        });
+
+        // Bloc alerte : à l'intérieur de .saved-item-main (pour s'empiler
+        // sous le nom/la requête comme le reste), donc stopPropagation
+        // indispensable ici — sinon cliquer la case ou le menu relancerait
+        // la recherche sauvegardée (voir le listener 'click' ci-dessus).
+        const alertBlock = row.querySelector('.saved-item-alert');
+        alertBlock.addEventListener('click', (e) => e.stopPropagation());
+        const alertToggle = row.querySelector('.alert-toggle');
+        const alertFrequency = row.querySelector('.alert-frequency');
+        alertToggle.addEventListener('change', async (e) => {
+          const enabled = e.target.checked;
+          alertFrequency.disabled = !enabled;
+          try {
+            await api(`/saved-searches/${id}/alert`, {
+              method: 'PATCH',
+              body: JSON.stringify({ enabled, frequency: alertFrequency.value }),
+            });
+          } catch (err) {
+            e.target.checked = !enabled;
+            alertFrequency.disabled = !e.target.checked;
+            alert("Impossible de modifier l'alerte : " + err.message);
+          }
+        });
+        alertFrequency.addEventListener('change', async (e) => {
+          try {
+            await api(`/saved-searches/${id}/alert`, {
+              method: 'PATCH',
+              body: JSON.stringify({ enabled: true, frequency: e.target.value }),
+            });
+          } catch (err) {
+            alert('Impossible de modifier la fréquence : ' + err.message);
+          }
+        });
+      });
+    }
+
+    // ── Alertes (notifications in-app des recherches sauvegardées) ──
+    function updateAlertsBadge(count) {
+      const badge = document.getElementById('alerts-badge');
+      if (count > 0) {
+        badge.textContent = count > 9 ? '9+' : String(count);
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    // Appelé au chargement de la page (après loadUiConfig, voir plus bas)
+    // pour que le badge reflète les alertes accumulées depuis la dernière
+    // visite, sans attendre que l'utilisateur ouvre le panneau.
+    async function refreshAlertsBadge() {
+      if (!uiConfigCache.alerts_enabled) return;
+      try {
+        const notifications = await api('/alerts');
+        updateAlertsBadge(notifications.filter(n => !n.seen).length);
+      } catch (e) {
+        // Échec silencieux (API indisponible, ou fonctionnalité désactivée
+        // entre-temps) : le badge reste simplement à son dernier état connu.
+      }
+    }
+
+    async function toggleAlertsPanel() {
+      const panel = document.getElementById('alerts-panel');
+      const opening = !panel.classList.contains('open');
+      if (!opening) { panel.classList.remove('open'); return; }
+
+      panel.classList.add('open');
+      panel.innerHTML = '<div class="saved-empty">Chargement…</div>';
+      try {
+        // La liste des recherches sauvegardées est nécessaire pour pouvoir
+        // relancer celle visée par une notification au clic (une
+        // notification ne stocke que son id/nom, pas ses critères complets
+        // — voir alert_notifications.py).
+        const [notifications, saved] = await Promise.all([api('/alerts'), api('/saved-searches')]);
+        renderAlertsPanel(notifications, saved);
+        // Ouvrir le panneau vaut consultation : on marque tout comme lu et
+        // on vide le badge, plutôt que d'exiger un clic par notification.
+        if (notifications.some(n => !n.seen)) {
+          await api('/alerts/mark-all-seen', { method: 'POST' });
+        }
+        updateAlertsBadge(0);
+      } catch (e) {
+        panel.innerHTML = `<div class="saved-empty">${e.message}</div>`;
+      }
+    }
+
+    function renderAlertsPanel(notifications, savedList) {
+      const panel = document.getElementById('alerts-panel');
+      if (!notifications.length) {
+        panel.innerHTML = '<div class="saved-empty">Aucune alerte pour le moment.</div>';
+        return;
+      }
+      panel.innerHTML = notifications.map(n => {
+        const date = new Date(n.checked_at).toLocaleString('fr-FR', {
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+        });
+        const resultLabel = n.new_count > 1 ? `${n.new_count} nouveaux résultats` : '1 nouveau résultat';
+        return `
+        <div class="saved-item alert-item" data-saved-id="${n.saved_search_id}">
+          <div class="saved-item-main">
+            <div class="saved-item-name">${escapeHtml(n.saved_search_name)}</div>
+            <div class="saved-item-query">${resultLabel} · ${date}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      panel.querySelectorAll('.alert-item').forEach(row => {
+        row.addEventListener('click', () => {
+          const entry = savedList.find(s => s.id === row.dataset.savedId);
+          if (!entry) {
+            alert('Cette recherche sauvegardée a été supprimée depuis.');
+            return;
+          }
+          panel.classList.remove('open');
+          applySavedSearch(entry);
         });
       });
     }
@@ -2006,7 +2146,7 @@
     });
 
     loadEngagementConfig();
-    loadUiConfig();
+    loadUiConfig().then(refreshAlertsBadge);
     loadIsAdmin();
     loadSearchableSources();
     loadDisplayStyles();
