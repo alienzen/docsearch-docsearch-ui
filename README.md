@@ -10,13 +10,18 @@ conversationnel (RAG). Fait partie de l'écosystème DocSearch :
 | **docsearch-ui** (ce dépôt) | Interface web statique |
 | [docsearch-infra](../docsearch-infra) | Orchestration Docker Compose |
 | [docsearch-docs](../docsearch-docs) | Documents commerciaux |
+| [docsearch-dataset-generator](../docsearch-dataset-generator) | Génération de jeux de test |
 
 ## Contenu
 
 ```
 public/
-├── index.html   # Page de recherche
-└── chat.html    # Assistant conversationnel (option RAG)
+├── index.html        # Page de recherche
+├── chat.html         # Assistant conversationnel (option RAG)
+├── admin.html         # Panneau d'administration (réservé au groupe LDAP admin, voir docsearch-api)
+├── admin-help.html    # Aide contextuelle du panneau d'administration
+├── stats.html         # Statistiques de recherche (volumétrie, requêtes fréquentes...)
+└── help.html          # Aide utilisateur de la page de recherche
 ```
 
 HTML/CSS/JS vanilla, aucune dépendance de build. Les pages appellent l'API
