@@ -440,6 +440,12 @@
               <input type="checkbox" id="ui-custom-keywords" ${cfg.custom_keywords_enabled ? 'checked' : ''} />
               Ajout/retrait de mots-clés personnalisés sur les documents (type fichier)
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-alerts" ${cfg.alerts_enabled ? 'checked' : ''} />
+              Alertes sur recherches sauvegardées ("🔔 Alertes" dans l'en-tête)
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -503,6 +509,15 @@
         const checked = e.target.checked;
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ custom_keywords_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-alerts')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ alerts_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
           alert(`Erreur : ${err.message}`);
@@ -767,6 +782,12 @@
           <td>${s.es_index}</td>
           <td class="muted">${s.folder}</td>
           <td class="muted">${s.description || ''}</td>
+          <td>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" class="src-file-ocr" ${s.ocr_enabled ? 'checked' : ''} />
+              <span class="muted">${s.ocr_enabled ? 'activé' : 'désactivé'}</span>
+            </label>
+          </td>
           <td><button class="secondary file-src-edit-label">Modifier le libellé</button></td>
           <td><button class="secondary file-src-edit-description">Modifier la description</button></td>
           <td>${name === 'documents' ? '' : '<button class="danger file-src-delete">Retirer</button>'}</td>
@@ -774,7 +795,7 @@
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th>Description</th><th></th><th></th><th></th></tr></thead>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Index ES</th><th>Dossier (sous SOURCES_MOUNT)</th><th>Description</th><th>OCR (FR)</th><th></th><th></th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="row" style="margin-top:14px;">
@@ -791,6 +812,12 @@
             Créez d'abord le sous-dossier sur l'hôte (SOURCES_ROOT/&lt;nom&gt;), puis enregistrez-le
             ici — le watcher commence à l'observer sous ~5s, sans redémarrage. Lancez ensuite
             l'indexation initiale avec le panneau "Indexation" ci-dessous.
+          </p>
+          <p class="muted" style="margin-top:4px;">
+            OCR (Tesseract, français) : active la reconnaissance de texte pour les PDF scannés
+            et les images (jpg/png/tiff/...) de cette source — coûteux en CPU, à réserver aux
+            sources qui en ont réellement besoin. N'affecte que les documents indexés après
+            activation (pas de réextraction rétroactive).
           </p>`;
       return panelWrap('filesources-panel', 'Sources fichiers', 'un répertoire indexé = un index Elasticsearch dédié', body);
     }
@@ -808,6 +835,26 @@
           const name = e.target.closest('tr').dataset.name;
           const current = fileSourcesCache[name]?.description || '';
           if (await editSourceFieldPrompt(name, '/admin/file-sources', 'description', current, 'Nouvelle description')) await refresh();
+        });
+      });
+      document.querySelectorAll('.src-file-ocr').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
+          const name = e.target.closest('tr').dataset.name;
+          const ocr_enabled = e.target.checked;
+          const label = e.target.nextElementSibling;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/file-sources/${encodeURIComponent(name)}/ocr`, {
+              method: 'POST', body: JSON.stringify({ ocr_enabled }),
+            });
+            label.textContent = ocr_enabled ? 'activé' : 'désactivé';
+            if (fileSourcesCache[name]) fileSourcesCache[name].ocr_enabled = ocr_enabled;
+          } catch (err) {
+            e.target.checked = !ocr_enabled;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
         });
       });
       document.querySelectorAll('.file-src-delete').forEach(btn => {
