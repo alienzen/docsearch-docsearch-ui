@@ -510,6 +510,69 @@
       });
     }
 
+    // ── Gabarits d'affichage des résultats ────────────────────────
+    // Composition de chaque style nommé (voir la colonne "Affichage" du
+    // panneau "Toutes les sources", qui assigne une source à l'un de ces
+    // styles) — quels champs afficher, dépliable ou non. Une boucle sur
+    // les styles retournés par l'API, pas de bloc codé en dur par style :
+    // un nouveau style ajouté côté display_styles_config.py apparaît ici
+    // sans changement de ce fichier.
+    const DISPLAY_STYLE_LABELS = {
+      default: 'Défaut', compact: 'Compact', minimal: 'Minimal',
+      dense: 'Dense', essentiel: 'Essentiel', complet_sans_extrait: 'Complet sans extrait',
+    };
+    const DISPLAY_FIELD_LABELS = {
+      source: 'Source', author: 'Auteur', date_modified: 'Date', folder: 'Dossier',
+      size: 'Taille', acl_group: 'Groupe ACL', filepath: 'Chemin', snippet: 'Extrait',
+      telephone: 'Téléphone',
+    };
+
+    async function renderDisplayStyles() {
+      const data = await api('/admin/display-styles');
+      const fields = data.allowed_fields;
+      const blocks = Object.entries(data.styles).map(([name, def]) => `
+        <div class="row" data-style="${name}" style="border-bottom:1px solid #f0f0ec;padding-bottom:14px;margin-bottom:14px;">
+          <p style="font-weight:600;margin-bottom:8px;">${DISPLAY_STYLE_LABELS[name] || name}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
+            ${fields.map(f => `
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" class="style-field-cb" value="${f}" ${def.fields.includes(f) ? 'checked' : ''} />
+                ${DISPLAY_FIELD_LABELS[f] || f}
+              </label>`).join('')}
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;margin-bottom:10px;">
+            <input type="checkbox" class="style-expandable-cb" ${def.expandable ? 'checked' : ''} />
+            Dépliable (sinon clic direct vers la fiche détail)
+          </label>
+          <button class="secondary style-save-btn">Enregistrer</button>
+        </div>`).join('');
+      return panelWrap('display-styles-panel', 'Gabarits d\'affichage', "effectif immédiatement, pas de redémarrage", blocks);
+    }
+
+    function wireDisplayStyles() {
+      document.querySelectorAll('.style-save-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const row = e.target.closest('[data-style]');
+          const styleName = row.dataset.style;
+          const fields = Array.from(row.querySelectorAll('.style-field-cb:checked')).map(cb => cb.value);
+          const expandable = row.querySelector('.style-expandable-cb').checked;
+          btn.disabled = true;
+          const originalLabel = btn.textContent;
+          try {
+            await api(`/admin/display-styles/${encodeURIComponent(styleName)}`, {
+              method: 'POST', body: JSON.stringify({ fields, expandable }),
+            });
+            btn.textContent = 'Enregistré ✓';
+            setTimeout(() => { btn.textContent = originalLabel; }, 1500);
+          } catch (err) {
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
     // Complète les panneaux CRUD dédiés (Sources fichiers / Sources SQL /
     // Sources web ci-dessous, qui gèrent chacun les champs propres à leur type)
@@ -527,7 +590,18 @@
     const TYPE_LABELS = { file: 'Bureautique', sql: 'SQL', web: 'Web' };
 
     async function renderAllSources() {
-      const sources = await api('/admin/all-sources');
+      // Les options du menu "Affichage" viennent de /display-styles (pas
+      // d'énumération codée en dur ici) — sinon ce menu se retrouve
+      // désynchronisé du catalogue réel dès qu'un style est ajouté/retiré
+      // côté display_styles_config.py, comme il l'était resté figé à
+      // "default"/"compact" lors du passage à 6 styles.
+      const [sources, styleDefs] = await Promise.all([
+        api('/admin/all-sources'),
+        api('/display-styles'),
+      ]);
+      const styleOptionsHtml = (current) => Object.keys(styleDefs).map(name =>
+        `<option value="${name}" ${current === name ? 'selected' : ''}>${DISPLAY_STYLE_LABELS[name] || name}</option>`
+      ).join('');
       const rows = Object.entries(sources)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, s]) => `
@@ -552,8 +626,7 @@
           </td>
           <td>
             <select class="src-display-style">
-              <option value="default" ${s.display_style !== 'compact' ? 'selected' : ''}>Détaillé</option>
-              <option value="compact" ${s.display_style === 'compact' ? 'selected' : ''}>Compact</option>
+              ${styleOptionsHtml(s.display_style)}
             </select>
           </td>
         </tr>`).join('');
@@ -1259,10 +1332,11 @@
 
       const labels = ['Sources fichiers', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
-                      'Toutes les sources', 'Mesure de satisfaction', 'Interface'];
+                      'Toutes les sources', 'Mesure de satisfaction', 'Interface', 'Gabarits d\'affichage'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
         renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(), renderUiConfig(),
+        renderDisplayStyles(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -1286,7 +1360,7 @@
       // premier pour peupler fileSourcesCache avant les panneaux qui le
       // lisent de façon synchrone. `results`/`labels` restent indexés
       // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 7, 0, 2, 3, 8, 9, 4, 5, 6];
+      const displayOrder = [1, 7, 0, 2, 3, 8, 9, 10, 4, 5, 6];
       $app.innerHTML = displayOrder.map(i => {
         const r = results[i];
         return r.status === 'fulfilled'
@@ -1303,6 +1377,7 @@
       wireAllSources();
       wireEngagement();
       wireUiConfig();
+      wireDisplayStyles();
       wireScan();
       updateToggleAllLabel();
     }
@@ -1323,6 +1398,32 @@
         // panneau garde son dernier état affiché plutôt que de casser.
       }
     }
+
+    // ── Raccourcis clavier ────────────────────────────────────────
+    // Mêmes principes que index.html : jamais actifs pendant une saisie
+    // (les panneaux de cette page sont pleins de champs texte/select),
+    // pas de garde "résultats visibles" équivalente ici (les panneaux
+    // sont toujours affichés une fois la page chargée).
+    function isTypingTarget(el) {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (isTypingTarget(e.target)) return;
+
+      switch (e.key) {
+        case 'r': case 'R':
+          e.preventDefault();
+          refresh();
+          break;
+        case 'a': case 'A':
+          e.preventDefault();
+          toggleAllPanels();
+          break;
+      }
+    });
 
     refresh();
     setInterval(refreshStatusOnly, 5000);

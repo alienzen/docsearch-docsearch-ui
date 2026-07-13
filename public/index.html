@@ -535,6 +535,22 @@
     // (et réciproquement) sans code de synchronisation supplémentaire.
     let allSources = [];   // [{name, label, type}], chargé une fois au démarrage
 
+    // Composition de chaque style d'affichage nommé (voir
+    // display_styles_config.py) — {style_name: {fields: [...], expandable}},
+    // chargé une fois au démarrage, éditable à chaud depuis l'admin (voir
+    // renderCard() plus bas, qui compose chaque carte à partir de ceci).
+    let displayStylesCache = {};
+
+    async function loadDisplayStyles() {
+      try {
+        displayStylesCache = await api('/display-styles');
+      } catch (e) {
+        // Échec silencieux (API indisponible) : repli sur renderCard()
+        // lui-même, qui retombe sur un style "tout affiché, dépliable"
+        // si displayStylesCache[...] est absent.
+      }
+    }
+
     // ── Sélection de documents / collections personnelles ──────────
     // Persiste tant que l'utilisateur ne l'annule pas explicitement ou ne
     // fait pas un resetSearch() complet — survit volontairement à un
@@ -959,11 +975,13 @@
         return;
       }
 
-      // Gabarit de carte par résultat, choisi selon le style d'affichage
+      // Gabarit de carte par résultat, composé selon le style d'affichage
       // configuré pour SA source précise (admin.html, panneau "Toutes les
-      // sources") — voir sourceDisplayStyle().
+      // sources") — voir sourceDisplayStyle() et displayStylesCache
+      // (composition de chaque style, éditable à chaud depuis
+      // display_styles_config.py, voir renderCard()).
       box.innerHTML = data.results.map(r =>
-        sourceDisplayStyle(r.source) === 'compact' ? renderCardCompact(r) : renderCardDefault(r)
+        renderCard(r, displayStylesCache[sourceDisplayStyle(r.source)])
       ).join('');
 
       renderPagination(data.total);
@@ -972,21 +990,38 @@
 
     // Case de sélection pour les collections — décalage du corps de carte
     // (métadonnées/chemin/extrait) pour rester aligné sous le titre selon
-    // qu'elle précède ou non l'icône. Partagé par renderCardDefault et
-    // renderCardCompact.
+    // qu'elle précède ou non l'icône. Partagé par les deux formes de
+    // renderCard() (dépliable/ligne dense).
     function _showSelectCb(r) {
       return uiConfigCache.collections_enabled && sourceCollectable(r.source);
     }
 
-    function renderCardDefault(r) {
+    // Repli si displayStylesCache est vide (échec de /display-styles) ou
+    // ne connaît pas encore ce style (nouveau style ajouté après coup côté
+    // API, page pas rechargée) — équivalent de l'ancien gabarit "default"
+    // codé en dur : tous les champs, dépliable.
+    const _DEFAULT_STYLE_DEF = {
+      fields: ['source', 'author', 'date_modified', 'folder', 'size', 'acl_group', 'filepath', 'snippet'],
+      expandable: true,
+    };
+
+    // Compose une carte de résultat à partir de styleDef ({fields:
+    // [...], expandable}) — remplace les anciennes renderCardDefault()/
+    // renderCardCompact() figées : le contenu de chaque style vient
+    // maintenant de display_styles_config.py (éditable depuis l'admin,
+    // sans redémarrage), seule la STRUCTURE (dépliable façon carte, ou
+    // ligne dense cliquable) reste codée en dur — deux formes possibles,
+    // sélectionnées par styleDef.expandable.
+    function renderCard(r, styleDef) {
+      const def = styleDef || _DEFAULT_STYLE_DEF;
+      const fields = new Set(def.fields || []);
+      const showSelectCb = _showSelectCb(r);
+      const checkboxHtml = showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
+                   onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
+                   aria-label="Sélectionner ce document" />` : '';
       const ec = EXT_COLORS[r.extension] || { bg: '#F1EFE8', color: '#444441' };
-      const snippets = (r.highlight || []).join(' … ');
       const scorePct = Math.min(100, Math.round((r.score || 0) * 20));
-      const isArchiveMember = (r.filepath || '').includes('::');
-      const archiveNote = isArchiveMember
-        ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
-        : '';
-      const sourceNote = r.source
+      const sourceNote = (fields.has('source') && r.source)
         ? (() => {
             // Couleur dérivée du nom brut (stable même si le libellé change),
             // mais texte et initiale affichés basés sur le libellé.
@@ -998,14 +1033,41 @@
             </span>`;
           })()
         : '';
-      const showSelectCb = _showSelectCb(r);
+
+      if (!def.expandable) {
+        return `
+        <div class="result-card result-card-compact" data-doc-id="${r.id}">
+          <div class="result-header" onclick="openDetail('${r.id}')">
+            ${checkboxHtml}
+            <div class="ext-icon" style="background:${ec.bg};color:${ec.color};width:26px;height:26px;font-size:9px;">${extLabel(r.extension)}</div>
+            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
+              <span class="result-title" style="margin-bottom:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.filename}</span>
+              ${sourceNote}
+              ${fields.has('author') && r.author ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-user" aria-hidden="true"></i> ${r.author}</span>` : ''}
+              ${fields.has('date_modified') ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-calendar" aria-hidden="true"></i> ${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
+              ${fields.has('folder') && r.folder ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-folder" aria-hidden="true"></i> ${r.folder}</span>` : ''}
+              ${fields.has('size') ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-file" aria-hidden="true"></i> ${fmtSize(r.size)}</span>` : ''}
+              ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-lock" aria-hidden="true"></i> ${r.acl.groups[0]}</span>` : ''}
+              ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-phone" aria-hidden="true"></i> ${r.telephone}</span>` : ''}
+            </div>
+            <span class="score-pill">${scorePct}%</span>
+          </div>
+        </div>`;
+      }
+
+      // Carte dépliable — motif "default" historique. bodyIndent aligne le
+      // corps (métadonnées/chemin/extrait) sous le titre selon que la case
+      // de sélection précède ou non l'icône.
+      const snippets = (r.highlight || []).join(' … ');
+      const isArchiveMember = (r.filepath || '').includes('::');
+      const archiveNote = isArchiveMember
+        ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
+        : '';
       const bodyIndent = showSelectCb ? 75 : 48;
       return `
       <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
         <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
-          ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
-                   onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
-                   aria-label="Sélectionner ce document" />` : ''}
+          ${checkboxHtml}
           <div class="ext-icon" style="background:${ec.bg};color:${ec.color};">${extLabel(r.extension)}</div>
           <div style="flex:1;min-width:0;">
             <div class="result-title">${r.title || r.filename}</div>
@@ -1016,14 +1078,15 @@
         <div class="result-body">
           <div class="result-meta" style="margin-left:${bodyIndent}px;">
             ${sourceNote}
-            ${r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-            <span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>
-            ${r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
-            <span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>
-            ${r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
+            ${fields.has('author') && r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
+            ${fields.has('date_modified') ? `<span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
+            ${fields.has('folder') && r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
+            ${fields.has('size') ? `<span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>` : ''}
+            ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
+            ${fields.has('telephone') && r.telephone ? `<span><i class="ti ti-phone" aria-hidden="true"></i>${r.telephone}</span>` : ''}
             ${archiveNote}
           </div>
-          ${r.filepath ? `
+          ${fields.has('filepath') && r.filepath ? `
             <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
               <i class="ti ti-route" aria-hidden="true"></i>
               <span class="path-text">${r.filepath}</span>
@@ -1034,42 +1097,8 @@
                       onclick="copyPathClick(event);"
                       title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>
             </div>` : ''}
-          ${snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
+          ${fields.has('snippet') && snippets ? `<div class="snippet" style="margin-left:${bodyIndent}px;">${snippets}</div>` : ''}
           <button class="result-detail-btn" style="margin-left:${bodyIndent}px;" onclick="openDetail('${r.id}')">Voir le détail complet (droits d'accès, aperçu…)</button>
-        </div>
-      </div>`;
-    }
-
-    // Ligne dense : pas de bloc métadonnées/extrait ni d'accordéon, un
-    // clic ouvre directement la fiche détail complète (openDetail) au
-    // lieu de déplier — pour les sources réglées en style "compact"
-    // (admin.html, voir sourceDisplayStyle()).
-    function renderCardCompact(r) {
-      const ec = EXT_COLORS[r.extension] || { bg: '#F1EFE8', color: '#444441' };
-      const scorePct = Math.min(100, Math.round((r.score || 0) * 20));
-      const showSelectCb = _showSelectCb(r);
-      const sourceNote = r.source
-        ? (() => {
-            const sc = sourceColor(r.source);
-            const label = sourceLabel(r.source);
-            return `<span class="source-badge" title="Source : ${escapeHtml(label)}">
-              <span class="source-dot" style="background:${sc.bg};color:${sc.color};">${escapeHtml(label.charAt(0).toUpperCase())}</span>
-              ${escapeHtml(label)}
-            </span>`;
-          })()
-        : '';
-      return `
-      <div class="result-card result-card-compact" data-doc-id="${r.id}">
-        <div class="result-header" onclick="openDetail('${r.id}')">
-          ${showSelectCb ? `<input type="checkbox" class="result-select-cb" data-doc-id="${r.id}" ${selectedDocs.has(r.id) ? 'checked' : ''}
-                   onclick="event.stopPropagation();" onchange="toggleDocSelection('${r.id}', this.checked)"
-                   aria-label="Sélectionner ce document" />` : ''}
-          <div class="ext-icon" style="background:${ec.bg};color:${ec.color};width:26px;height:26px;font-size:9px;">${extLabel(r.extension)}</div>
-          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
-            <span class="result-title" style="margin-bottom:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.filename}</span>
-            ${sourceNote}
-          </div>
-          <span class="score-pill">${scorePct}%</span>
         </div>
       </div>`;
     }
@@ -1885,6 +1914,12 @@
         case 'r': case 'R':
           if (resultsVisible) clearAllFilters();
           break;
+        case 'n': case 'N':
+          // Contrairement à 'r' (clearAllFilters, ne touche qu'aux
+          // facettes/période) : réinitialisation complète, y compris la
+          // requête elle-même et le tri — voir resetSearch().
+          if (resultsVisible) resetSearch();
+          break;
         case '?':
           if (uiConfigCache.help_enabled) window.open('/help', '_blank');
           break;
@@ -1895,6 +1930,7 @@
     loadUiConfig();
     loadIsAdmin();
     loadSearchableSources();
+    loadDisplayStyles();
     applyCollapsedFacets();
     updateCompactToggleLabel();
   </script>
