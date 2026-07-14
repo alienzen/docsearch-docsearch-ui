@@ -283,6 +283,12 @@
 
     <div class="layout">
       <aside class="sidebar">
+        <div class="facet-section" id="facet-section-sources">
+          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-sources')">Source<span class="facet-caret">▾</span></div>
+          <div class="facet-body">
+            <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
+          </div>
+        </div>
         <div class="facet-section" id="facet-section-extensions">
           <div class="facet-title" onclick="toggleFacetAccordion('facet-section-extensions')">Type de fichier<span class="facet-caret">▾</span></div>
           <div class="facet-body">
@@ -298,12 +304,6 @@
               <label for="date-to">Au</label>
               <input type="date" id="date-to" onchange="applyDateRange()" />
             </div>
-          </div>
-        </div>
-        <div class="facet-section" id="facet-section-sources">
-          <div class="facet-title" onclick="toggleFacetAccordion('facet-section-sources')">Source<span class="facet-caret">▾</span></div>
-          <div class="facet-body">
-            <div id="facet-sources"><div class="facet-empty">Lancez une recherche</div></div>
           </div>
         </div>
         <div class="facet-section" id="facet-section-authors">
