@@ -10,9 +10,10 @@
     body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18;
            min-height: 100vh; display: flex; flex-direction: column; }
 
-    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
-              display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10;
+    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 12px 24px;
+              display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; z-index: 10;
               flex-shrink: 0; }
+    .header-top { display: flex; align-items: center; gap: 16px; }
     .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
     .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; }
     /* Combinateur d'enfant direct (>) plutôt qu'un sélecteur descendant :
@@ -28,8 +29,10 @@
     .btn-reset { padding: 8px 14px; border-radius: 8px; border: 1px solid #d5d5ce;
                  background: #fff; color: #666; cursor: pointer; font-size: 13px; }
     .btn-reset:hover { background: #f5f5f3; color: #333; }
-    .header-links { display: flex; gap: 16px; align-items: center; margin-left: auto; }
+    .header-links { display: flex; gap: 16px; align-items: center; justify-content: flex-end; }
     .header-links a { font-size: 14px; text-decoration: none; }
+    #current-user { background: #f0f0ec; color: #666; padding: 4px 10px; border-radius: 99px;
+                    font-size: 12px; margin-left: auto; white-space: nowrap; }
 
     /* ── Présélection de sources (avant recherche) ────────────── */
     /* .sources-select-wrap est le flex item de .search-wrap (donc étiré
@@ -246,17 +249,20 @@
 </head>
 <body>
   <header class="header">
-    <span class="logo">DocSearch</span>
-    <div class="search-wrap">
-      <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
-             onkeydown="if(event.key==='Enter')doSearch()" />
-      <div class="sources-select-wrap">
-        <button type="button" class="sources-select-toggle" id="sources-select-toggle"
-                title="Restreindre la recherche à une ou plusieurs sources" onclick="toggleSourcesPanel()">Toutes les sources ▾</button>
-        <div class="sources-select-panel" id="sources-select-panel"></div>
+    <div class="header-top">
+      <span class="logo">DocSearch</span>
+      <div class="search-wrap">
+        <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
+               onkeydown="if(event.key==='Enter')doSearch()" />
+        <div class="sources-select-wrap">
+          <button type="button" class="sources-select-toggle" id="sources-select-toggle"
+                  title="Restreindre la recherche à une ou plusieurs sources" onclick="toggleSourcesPanel()">Toutes les sources ▾</button>
+          <div class="sources-select-panel" id="sources-select-panel"></div>
+        </div>
+        <button class="btn-primary" onclick="doSearch()">Rechercher</button>
+        <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
       </div>
-      <button class="btn-primary" onclick="doSearch()">Rechercher</button>
-      <button class="btn-reset" onclick="resetSearch()">Réinitialiser la recherche</button>
+      <span id="current-user"></span>
     </div>
     <div class="header-links">
       <div class="saved-wrap">
@@ -340,7 +346,7 @@
               <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
               <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
             </span>
-          <div class="sort-select">
+          <div class="sort-select" id="sort-select-wrap">
             Trier par :
             <select id="sort" onchange="doSearch()">
               <option value="_score">Pertinence</option>
@@ -492,7 +498,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -520,6 +526,7 @@
       document.getElementById('collections-wrap').style.display = uiConfigCache.collections_enabled ? '' : 'none';
       if (!uiConfigCache.collections_enabled) clearSelection();
       document.getElementById('alerts-wrap').style.display = uiConfigCache.alerts_enabled ? '' : 'none';
+      document.getElementById('sort-select-wrap').style.display = uiConfigCache.sort_enabled ? '' : 'none';
       updateAdminLinksVisibility();
     }
 
@@ -529,7 +536,10 @@
     // contrairement à un vrai appel /admin/*.
     async function loadIsAdmin() {
       try {
-        isAdminCache = (await api('/is-admin')).is_admin;
+        const res = await api('/is-admin');
+        isAdminCache = res.is_admin;
+        const groupsSuffix = res.groups && res.groups.length ? ` · ${res.groups.join(', ')}` : '';
+        document.getElementById('current-user').textContent = `Connecté : ${res.user}${groupsSuffix}`;
       } catch (e) {
         // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
       }

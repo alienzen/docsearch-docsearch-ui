@@ -76,8 +76,9 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Administration</span>
+    <span id="current-user" style="margin-left:auto; color:#888; font-size:13px;"></span>
     <button id="toggle-all-panels" onclick="toggleAllPanels()"
-            style="margin-left:auto;background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
+            style="background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
     <a href="/admin-help.html">Aide</a>
     <a href="/stats.html">Statistiques</a>
     <a href="/">← Recherche</a>
@@ -212,6 +213,17 @@
         throw err;
       }
       return res.json();
+    }
+
+    async function loadCurrentUser() {
+      try {
+        const res = await api('/is-admin');
+        const groupsSuffix = res.groups && res.groups.length ? ` · ${res.groups.join(', ')}` : '';
+        document.getElementById('current-user').textContent = `Connecté : ${res.user}${groupsSuffix}`;
+      } catch (e) {
+        // Échec silencieux (API indisponible) : le reste de la page gère
+        // déjà l'affichage d'erreur via refresh()/renderStatus().
+      }
     }
 
     function statusDot(up) {
@@ -496,6 +508,12 @@
               <input type="checkbox" id="ui-alerts" ${cfg.alerts_enabled ? 'checked' : ''} />
               Alertes sur recherches sauvegardées ("🔔 Alertes" dans l'en-tête)
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-sort" ${cfg.sort_enabled ? 'checked' : ''} />
+              Sélecteur "Trier par" au-dessus des résultats de recherche
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -568,6 +586,15 @@
         const checked = e.target.checked;
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ alerts_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-sort')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ sort_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
           alert(`Erreur : ${err.message}`);
@@ -1568,6 +1595,7 @@
     });
 
     refresh();
+    loadCurrentUser();
     setInterval(refreshStatusOnly, 5000);
   </script>
 </body>
