@@ -25,6 +25,16 @@
     .panel-body { margin-top: 14px; }
     .panel.collapsed .panel-body { display: none; }
 
+    .panel-group { display: flex; flex-direction: column; gap: 24px; }
+    .section-group-title { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                            font-size: 12px; font-weight: 700; text-transform: uppercase;
+                            letter-spacing: 0.08em; color: #185FA5; padding-bottom: 6px;
+                            border-bottom: 2px solid #E6F1FB; cursor: pointer; user-select: none; }
+    .group-caret { font-size: 11px; color: #185FA5; flex-shrink: 0; transition: transform 0.15s; }
+    .panel-group.collapsed .group-caret { transform: rotate(-90deg); }
+    .panel-group-body { display: flex; flex-direction: column; gap: 24px; }
+    .panel-group.collapsed .panel-group-body { display: none; }
+
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; }
     .status-card { border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px; }
@@ -112,19 +122,57 @@
       updateToggleAllLabel();
     }
 
-    // Un seul bouton, qui replie ou déplie TOUS les panneaux selon l'état
-    // actuel — si au moins un est déplié, l'action est "tout replier" ;
-    // une fois tous repliés, elle devient "tout déplier". Évite d'avoir
-    // deux boutons séparés pour un cas d'usage aussi simple.
+    // ── Accordéon de groupe ─────────────────────────────────────
+    // Second niveau, indépendant du premier : replie/déplie une SECTION
+    // entière (ex. "Sources SQL", qui regroupe plusieurs panneaux) sans
+    // toucher à l'état individuel de ses panneaux — les rouvrir plus tard
+    // les retrouve chacun tel qu'ils étaient. Clé localStorage séparée
+    // (des ids de groupe, pas de panneau) pour ne pas mélanger les deux
+    // jeux d'état.
+    const COLLAPSED_GROUPS_KEY = 'docsearch-admin-collapsed-groups';
+
+    function loadCollapsedGroups() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) || '[]'));
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    const collapsedGroups = loadCollapsedGroups();
+
+    function toggleGroupAccordion(id) {
+      if (collapsedGroups.has(id)) collapsedGroups.delete(id); else collapsedGroups.add(id);
+      document.getElementById(id)?.classList.toggle('collapsed', collapsedGroups.has(id));
+      try {
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsedGroups]));
+      } catch (e) {
+        // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
+      }
+      updateToggleAllLabel();
+    }
+
+    // Un seul bouton, qui replie ou déplie TOUS les panneaux ET TOUS les
+    // groupes selon l'état actuel — si au moins un est déplié (panneau ou
+    // groupe), l'action est "tout replier" ; une fois tout repliés, elle
+    // devient "tout déplier". Évite d'avoir des boutons séparés pour un
+    // cas d'usage aussi simple.
     function toggleAllPanels() {
       const panels = document.querySelectorAll('#app .panel');
-      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      const groups = document.querySelectorAll('#app .panel-group');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'))
+                        || Array.from(groups).some(g => !g.classList.contains('collapsed'));
       panels.forEach(p => {
         p.classList.toggle('collapsed', anyExpanded);
         if (anyExpanded) collapsedPanels.add(p.id); else collapsedPanels.delete(p.id);
       });
+      groups.forEach(g => {
+        g.classList.toggle('collapsed', anyExpanded);
+        if (anyExpanded) collapsedGroups.add(g.id); else collapsedGroups.delete(g.id);
+      });
       try {
         localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsedGroups]));
       } catch (e) {
         // localStorage indisponible : le pli reste actif pour cette session, simplement pas persisté.
       }
@@ -135,7 +183,9 @@
       const btn = document.getElementById('toggle-all-panels');
       if (!btn) return;
       const panels = document.querySelectorAll('#app .panel');
-      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'));
+      const groups = document.querySelectorAll('#app .panel-group');
+      const anyExpanded = Array.from(panels).some(p => !p.classList.contains('collapsed'))
+                        || Array.from(groups).some(g => !g.classList.contains('collapsed'));
       btn.textContent = anyExpanded ? 'Tout replier' : 'Tout déplier';
     }
 
@@ -1434,19 +1484,31 @@
       // place — un index ES absent (503) n'empêche pas les panneaux de
       // configuration (Redis, sans rapport) de s'afficher normalement.
       //
-      // Ordre d'AFFICHAGE seulement (État des composants en premier,
-      // visibilité immédiate de la santé du cluster) — distinct de
-      // l'ordre d'EXÉCUTION ci-dessus, qui doit rester Sources en
-      // premier pour peupler fileSourcesCache avant les panneaux qui le
-      // lisent de façon synchrone. `results`/`labels` restent indexés
-      // dans l'ordre d'exécution, seul displayOrder change.
-      const displayOrder = [1, 7, 0, 2, 3, 8, 9, 10, 4, 5, 6];
-      $app.innerHTML = displayOrder.map(i => {
+      // Groupage d'AFFICHAGE seulement, par type de source — distinct de
+      // l'ordre d'EXÉCUTION ci-dessus, qui doit rester Sources en premier
+      // pour peupler fileSourcesCache avant les panneaux qui le lisent de
+      // façon synchrone. `results`/`labels` restent indexés dans l'ordre
+      // d'exécution, seul l'assemblage ci-dessous change.
+      const panelAt = i => {
         const r = results[i];
         return r.status === 'fulfilled'
           ? r.value
           : `<div class="panel"><h2>${labels[i]}</h2><div class="error-banner">${r.reason.message}</div></div>`;
-      }).join('') + renderScan();
+      };
+      const group = (id, title, indices, extraHtml = '') => `
+        <div class="panel-group${collapsedGroups.has(id) ? ' collapsed' : ''}" id="${id}">
+          <div class="section-group-title" onclick="toggleGroupAccordion('${id}')">
+            <span>${title}</span><span class="group-caret">▾</span>
+          </div>
+          <div class="panel-group-body">${indices.map(panelAt).join('')}${extraHtml}</div>
+        </div>`;
+
+      $app.innerHTML =
+        group('group-overview', 'Vue d\'ensemble', [1, 7]) +
+        group('group-file-sources', 'Sources fichiers', [0, 2, 4], renderScan()) +
+        group('group-sql-sources', 'Sources SQL', [5]) +
+        group('group-web-sources', 'Sources web', [6]) +
+        group('group-interface', 'Interface et engagement', [8, 9, 10, 3]);
 
       wireFileSources();
       wireFiletypes();
