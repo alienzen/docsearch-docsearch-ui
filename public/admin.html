@@ -66,6 +66,18 @@
            font-size: 12px; display: flex; align-items: center; gap: 6px; }
     .tag button { background: none; color: #3C3489; padding: 0; font-size: 14px; line-height: 1; }
 
+    .source-tree, .source-tree ul { list-style: none; }
+    .source-tree { margin-top: 6px; max-height: 420px; overflow-y: auto; border: 1px solid #e5e5e0;
+                   border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+    .source-tree ul.tree-children { margin-left: 18px; }
+    .tree-entry { padding: 3px 0; }
+    .tree-toggle { display: inline-block; width: 14px; color: #185FA5; font-size: 11px; }
+    .tree-entry.tree-dir { cursor: pointer; }
+    .tree-entry.tree-file .tree-name { color: #444; }
+    .tree-entry.tree-excluded > .tree-name { color: #c92a2a; text-decoration: line-through; }
+    .tree-entry.tree-included > .tree-name { color: #1f9254; }
+    .tree-included-tag { color: #1f9254; font-size: 12px; }
+
     .muted { color: #888; font-size: 12px; }
     .error-banner { background: #fff0f0; border: 1px solid #f5c2c2; color: #a12a2a;
                     padding: 14px 18px; border-radius: 8px; }
@@ -1472,6 +1484,94 @@
       });
     }
 
+    // ── Arborescence des sources ──────────────────────────────────
+    // Chargée dossier par dossier via GET /admin/file-sources/{name}/tree
+    // (jamais un dump récursif complet) — reste utilisable même sur une
+    // source à des dizaines de milliers de fichiers, au prix d'un
+    // aller-retour réseau par dépliage.
+    let selectedTreeSource = 'documents';
+
+    function treeEntryHtml(entry) {
+      // "exclu" prime visuellement sur "inclus" — même priorité que la
+      // règle métier (path_filter : un chemin exclu le reste même s'il
+      // correspond aussi à un motif de la liste blanche).
+      let tag = '', cls = '';
+      if (entry.excluded) {
+        tag = ' <span class="muted">(exclu par les filtres)</span>';
+        cls = ' tree-excluded';
+      } else if (entry.included) {
+        tag = ' <span class="tree-included-tag">(liste blanche)</span>';
+        cls = ' tree-included';
+      }
+      if (entry.type === 'dir') {
+        return `<li class="tree-entry tree-dir${cls}" data-path="${entry.path}" data-type="dir">
+            <span class="tree-toggle">▸</span><span class="tree-name">${entry.name}/</span>${tag}
+            <ul class="tree-children" hidden></ul>
+          </li>`;
+      }
+      return `<li class="tree-entry tree-file${cls}" data-path="${entry.path}" data-type="file">
+          <span class="tree-toggle"></span><span class="tree-name">${entry.name}</span>${tag}
+        </li>`;
+    }
+
+    async function loadTreeLevel(ulEl, source, path) {
+      ulEl.innerHTML = '<li class="muted">Chargement…</li>';
+      try {
+        const res = await api(`/admin/file-sources/${encodeURIComponent(source)}/tree?path=${encodeURIComponent(path)}`);
+        ulEl.innerHTML = res.entries.length
+          ? res.entries.map(treeEntryHtml).join('')
+          : '<li class="muted">(dossier vide)</li>';
+      } catch (err) {
+        ulEl.innerHTML = `<li class="error-banner">${err.message}</li>`;
+      }
+    }
+
+    function renderSourceTree() {
+      if (!fileSourcesCache[selectedTreeSource]) selectedTreeSource = 'documents';
+      const body = `
+          <p class="muted">Un dossier n'est chargé qu'au moment où vous le dépliez — les éléments
+          en rouge barré sont exclus par les filtres de sous-dossiers ; ceux en vert
+          "liste blanche" correspondent explicitement à un motif inclus (seulement si la
+          source a une liste blanche active).</p>
+          <div class="row" style="margin-top:10px;">
+            <label class="muted" for="tree-source">Source :</label>
+            <select id="tree-source">${fileSourceOptions(selectedTreeSource)}</select>
+          </div>
+          <ul id="tree-root" class="source-tree"></ul>`;
+      return panelWrap('source-tree-panel', 'Arborescence des sources', 'chargée à la demande, dossier par dossier', body);
+    }
+
+    function wireSourceTree() {
+      const root = document.getElementById('tree-root');
+      if (!root) return;
+
+      document.getElementById('tree-source')?.addEventListener('change', (e) => {
+        selectedTreeSource = e.target.value;
+        loadTreeLevel(root, selectedTreeSource, '');
+      });
+
+      root.addEventListener('click', (e) => {
+        const li = e.target.closest('.tree-entry');
+        if (!li || li.dataset.type !== 'dir') return;
+        const childUl = li.querySelector(':scope > .tree-children');
+        const toggle = li.querySelector(':scope > .tree-toggle');
+        const collapsed = childUl.hasAttribute('hidden');
+        if (collapsed) {
+          childUl.removeAttribute('hidden');
+          toggle.textContent = '▾';
+          if (!childUl.dataset.loaded) {
+            childUl.dataset.loaded = '1';
+            loadTreeLevel(childUl, selectedTreeSource, li.dataset.path);
+          }
+        } else {
+          childUl.setAttribute('hidden', '');
+          toggle.textContent = '▸';
+        }
+      });
+
+      loadTreeLevel(root, selectedTreeSource, '');
+    }
+
     // ── Orchestration ───────────────────────────────────────────
     async function refresh() {
       // Sources d'abord et à part (await, pas dans le lot ci-dessous) :
@@ -1532,12 +1632,13 @@
 
       $app.innerHTML =
         group('group-overview', 'Vue d\'ensemble', [1, 7]) +
-        group('group-file-sources', 'Sources fichiers', [0, 2, 4], renderScan()) +
+        group('group-file-sources', 'Sources fichiers', [0, 2, 4], renderScan() + renderSourceTree()) +
         group('group-sql-sources', 'Sources SQL', [5]) +
         group('group-web-sources', 'Sources web', [6]) +
         group('group-interface', 'Interface et engagement', [8, 9, 10, 3]);
 
       wireFileSources();
+      wireSourceTree();
       wireFiletypes();
       wireConfig();
       wirePathFilters();
