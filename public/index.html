@@ -498,7 +498,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true };
     let isAdminCache = false;
 
     function updateAdminLinksVisibility() {
@@ -506,6 +506,14 @@
       document.getElementById('admin-link').style.display = display;
       document.getElementById('footer-stats-link').style.display = display;
       document.getElementById('footer-admin-link').style.display = display;
+    }
+
+    // Badge "Connecté : <utilisateur>" — bascule /admin/ui-config
+    // (show_current_user_enabled). Appelé depuis loadUiConfig() ET
+    // loadIsAdmin() (chargées en parallèle, voir plus bas) pour rester
+    // correct quel que soit l'ordre de résolution des deux appels.
+    function updateCurrentUserVisibility() {
+      document.getElementById('current-user').style.display = uiConfigCache.show_current_user_enabled ? '' : 'none';
     }
 
     // Bascules d'interface sans rapport avec la satisfaction (ex:
@@ -528,6 +536,7 @@
       document.getElementById('alerts-wrap').style.display = uiConfigCache.alerts_enabled ? '' : 'none';
       document.getElementById('sort-select-wrap').style.display = uiConfigCache.sort_enabled ? '' : 'none';
       updateAdminLinksVisibility();
+      updateCurrentUserVisibility();
     }
 
     // Ces pages exigent déjà elles-mêmes le groupe admin (403 sinon) —
@@ -544,6 +553,7 @@
         // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
       }
       updateAdminLinksVisibility();
+      updateCurrentUserVisibility();
     }
 
     // ── Accordéon des facettes (sidebar) ─────────────────────────

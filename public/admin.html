@@ -526,6 +526,12 @@
               <input type="checkbox" id="ui-sort" ${cfg.sort_enabled ? 'checked' : ''} />
               Sélecteur "Trier par" au-dessus des résultats de recherche
             </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-show-user" ${cfg.show_current_user_enabled ? 'checked' : ''} />
+              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête de recherche
+            </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -607,6 +613,15 @@
         const checked = e.target.checked;
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ sort_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-show-user')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
           alert(`Erreur : ${err.message}`);
