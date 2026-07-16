@@ -4,75 +4,101 @@
   <meta charset="UTF-8" />
   <title>DocSearch — Statistiques de recherche</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/theme-admin.css" />
+  <script>
+    // Applique tout de suite le dernier thème connu (cache localStorage,
+    // par navigateur/poste) pour éviter un flash au thème par défaut le
+    // temps que /ui-config réponde (voir le script en bas de page). Même
+    // clé que index.html/admin.html/help.html/admin-help.html : un seul
+    // thème pour toute l'installation, pas de préférence par page.
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
-    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
-              display: flex; align-items: center; gap: 16px; }
-    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
-    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+    body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text); }
+    .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 14px 24px;
+              display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px;
+              position: sticky; top: 0; z-index: 10; }
+    .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
+    .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; margin-left: auto; }
 
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex;
-                 flex-direction: column; gap: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .link-button { background: none; border: none; color: var(--color-primary); font-size: 14px;
+                   cursor: pointer; padding: 0; font-family: inherit; }
+    #app { display: flex; flex-direction: column; gap: 24px; }
 
-    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
-    .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+    .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
+                       border-radius: 50%; background: var(--color-primary); color: var(--color-bg-surface); border: none;
+                       font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+                       display: none; align-items: center; justify-content: center; z-index: 20; }
+    .scroll-top-btn.show { display: flex; }
+    .scroll-top-btn:hover { background: var(--color-primary-hover); }
+
+    .panel { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 20px; }
+    .panel h2 small { font-weight: 400; color: var(--color-text-faint); font-size: 12px; margin-left: 8px; }
 
     .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-                     font-size: 16px; color: #1a1a18; margin: 0; cursor: pointer; user-select: none; }
-    .accordion-caret { font-size: 11px; color: #888; flex-shrink: 0; transition: transform 0.15s; }
+                     font-size: 16px; color: var(--color-text); margin: 0; cursor: pointer; user-select: none; }
+    .accordion-caret { font-size: 11px; color: var(--color-text-faint); flex-shrink: 0; transition: transform 0.15s; }
     .panel.collapsed .accordion-caret { transform: rotate(-90deg); }
     .panel-body { margin-top: 14px; }
     .panel.collapsed .panel-body { display: none; }
 
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; margin-bottom: 16px; }
-    .status-card { border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px; }
-    .status-card .name { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .status-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; }
+    .status-card .name { font-size: 12px; color: var(--color-text-faint); margin-bottom: 4px; }
     .status-card .value { font-size: 20px; font-weight: 600; }
 
     .day-bars { display: flex; align-items: flex-end; gap: 6px; height: 90px; }
     .day-bar { flex: 1; display: flex; flex-direction: column; align-items: center;
                justify-content: flex-end; height: 100%; }
-    .day-bar .bar { width: 100%; background: #185FA5; border-radius: 3px 3px 0 0; min-height: 2px; }
-    .day-bar .label { font-size: 10px; color: #888; margin-top: 4px; white-space: nowrap; }
-    .day-bar .count { font-size: 10px; color: #333; }
+    .day-bar .bar { width: 100%; background: var(--color-primary); border-radius: 3px 3px 0 0; min-height: 2px; }
+    .day-bar .label { font-size: 10px; color: var(--color-text-faint); margin-top: 4px; white-space: nowrap; }
+    .day-bar .count { font-size: 10px; color: var(--color-text-secondary); }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
-    th { color: #888; font-weight: 500; font-size: 12px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border-light); }
+    th { color: var(--color-text-faint); font-weight: 500; font-size: 12px; }
     td.mono { font-family: ui-monospace, monospace; font-size: 12px; }
 
-    input[type=text] { padding: 5px 8px; border: 1px solid #d5d5ce;
+    input[type=text] { padding: 5px 8px; border: 1px solid var(--color-border-input);
                         border-radius: 6px; font-size: 13px; width: 100%; }
 
     .row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
     .row input[type=text] { flex: 1; }
 
-    button { padding: 6px 14px; background: #185FA5; color: #fff; border: none;
+    button { padding: 6px 14px; background: var(--color-primary); color: var(--color-bg-surface); border: none;
              border-radius: 6px; cursor: pointer; font-size: 13px; }
-    button.secondary { background: #eee; color: #333; }
+    button.secondary { background: var(--color-bg-hover); color: var(--color-text-secondary); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .pager { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
     .pager .muted { flex: 1; }
 
-    .muted { color: #888; font-size: 12px; }
-    .error-banner { background: #fff0f0; border: 1px solid #f5c2c2; color: #a12a2a;
+    .muted { color: var(--color-text-faint); font-size: 12px; }
+    .error-banner { background: var(--color-error-bg); border: 1px solid var(--color-error-border); color: var(--color-danger-dark);
                     padding: 14px 18px; border-radius: 8px; }
   </style>
 </head>
 <body>
   <header class="header">
     <span class="logo">DocSearch — Statistiques de recherche</span>
-    <button id="toggle-all-panels" onclick="toggleAllPanels()"
-            style="margin-left:auto;background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
     <a href="/admin.html">← Administration</a>
   </header>
 
-  <div class="container" id="app">
-    <p class="muted">Chargement…</p>
+  <div class="container">
+    <div class="toolbar">
+      <button id="toggle-all-panels" onclick="toggleAllPanels()" class="link-button">Tout replier</button>
+    </div>
+    <div id="app">
+      <p class="muted">Chargement…</p>
+    </div>
   </div>
+
+  <button id="scroll-top-btn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
+          title="Retour en haut" aria-label="Retour en haut">↑</button>
 
   <script>
     const $app = document.getElementById('app');
@@ -514,6 +540,24 @@
       wireAuditLog();
       updateToggleAllLabel();
     }
+
+    // ── Bouton "Retour en haut" ──────────────────────────────────
+    // Visible seulement une fois qu'on a scrollé un peu (sinon un bouton
+    // "remonter" alors qu'on est déjà en haut n'a pas de sens).
+    window.addEventListener('scroll', () => {
+      document.getElementById('scroll-top-btn').classList.toggle('show', window.scrollY > 300);
+    }, { passive: true });
+
+    // Récupère le thème faisant autorité (réglé depuis admin.html) et
+    // met à jour le cache local en conséquence — voir le script en tête
+    // de page pour l'application immédiate depuis ce cache.
+    api('/ui-config').then(cfg => {
+      document.documentElement.dataset.theme = cfg.theme || 'default';
+      try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+    }).catch(() => {
+      // Échec silencieux (API indisponible) : le thème mis en cache
+      // (localStorage, appliqué plus haut) reste affiché.
+    });
 
     refresh();
   </script>
