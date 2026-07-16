@@ -201,6 +201,13 @@
     .footer-links a { color: #888; text-decoration: none; }
     .footer-links a:hover { color: #185FA5; }
 
+    .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
+                       border-radius: 50%; background: #185FA5; color: #fff; border: none;
+                       font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+                       display: none; align-items: center; justify-content: center; z-index: 20; }
+    .scroll-top-btn.show { display: flex; }
+    .scroll-top-btn:hover { background: #0C447C; }
+
     .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,24,0.45); display: none;
                      align-items: center; justify-content: center; z-index: 100; padding: 20px; }
     .modal-overlay.open { display: flex; }
@@ -376,6 +383,9 @@
       <a href="/admin.html" id="footer-admin-link" style="display:none;">Administration</a>
     </div>
   </footer>
+
+  <button id="scroll-top-btn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
+          title="Retour en haut" aria-label="Retour en haut">↑</button>
 
   <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal-card" id="modal-card"></div>
@@ -2239,6 +2249,13 @@
           break;
       }
     });
+
+    // ── Bouton "Retour en haut" ──────────────────────────────────
+    // Visible seulement une fois qu'on a scrollé un peu (sinon un bouton
+    // "remonter" alors qu'on est déjà en haut n'a pas de sens).
+    window.addEventListener('scroll', () => {
+      document.getElementById('scroll-top-btn').classList.toggle('show', window.scrollY > 300);
+    }, { passive: true });
 
     loadEngagementConfig();
     loadUiConfig().then(refreshAlertsBadge);

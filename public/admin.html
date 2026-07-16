@@ -8,17 +8,27 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
     .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
-              display: flex; align-items: center; gap: 16px; }
+              display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px;
+              position: sticky; top: 0; z-index: 10; }
     .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
-    .header-nav { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+    .header-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; }
     .header a { font-size: 14px; color: #185FA5; text-decoration: none; }
-    .header-user { color: #888; font-size: 13px; }
+    .header-user { background: #E6F1FB; color: #185FA5; font-size: 12px; font-weight: 500;
+                   padding: 4px 10px; border-radius: 12px; }
+    .header-user:empty { display: none; }
 
     .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
     .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .link-button { background: none; border: none; color: #185FA5; font-size: 14px;
                    cursor: pointer; padding: 0; font-family: inherit; }
     #app { display: flex; flex-direction: column; gap: 24px; }
+
+    .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
+                       border-radius: 50%; background: #185FA5; color: #fff; border: none;
+                       font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+                       display: none; align-items: center; justify-content: center; z-index: 20; }
+    .scroll-top-btn.show { display: flex; }
+    .scroll-top-btn:hover { background: #0C447C; }
 
     .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
     .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
@@ -103,12 +113,16 @@
 
   <div class="container">
     <div class="toolbar">
-      <button id="toggle-all-panels" onclick="toggleAllPanels()" class="link-button">Tout replier</button>
+      <button id="toggle-all-panels" onclick="toggleAllPanels()" class="link-button"
+              title="Raccourci clavier : a">Tout replier</button>
     </div>
     <div id="app">
       <p class="muted">Chargement…</p>
     </div>
   </div>
+
+  <button id="scroll-top-btn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
+          title="Retour en haut" aria-label="Retour en haut">↑</button>
 
   <script>
     const $app = document.getElementById('app');
@@ -1800,6 +1814,13 @@
           break;
       }
     });
+
+    // ── Bouton "Retour en haut" ──────────────────────────────────
+    // Visible seulement une fois qu'on a scrollé un peu (sinon un bouton
+    // "remonter" alors qu'on est déjà en haut n'a pas de sens).
+    window.addEventListener('scroll', () => {
+      document.getElementById('scroll-top-btn').classList.toggle('show', window.scrollY > 300);
+    }, { passive: true });
 
     refresh();
     loadCurrentUser();
