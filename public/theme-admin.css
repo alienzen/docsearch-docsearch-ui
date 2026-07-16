@@ -6,12 +6,37 @@
    rien n'empêche de les faire diverger ensuite.
 */
 
+/* Marianne (police officielle du DSFR) — fichiers embarqués localement
+   (public/fonts/), pas de dépendance à une CDN externe. Usage réservé
+   aux Entités Autorisées au sens des CGU du DSFR (voir
+   systeme-de-design.gouv.fr/a-propos/conditions-generales-d-utilisation) ;
+   n'est chargée que si un thème l'active via --font-family (voir
+   [data-theme="dsfr"] plus bas) — @font-face seul ne déclenche aucun
+   téléchargement tant qu'aucun texte visible ne l'utilise. Regular +
+   Bold seulement (couvre les graisses 400/600 déjà utilisées ici — un
+   texte à 600 se rabat sur le fichier Bold, le plus proche des deux). */
+@font-face {
+  font-family: 'Marianne';
+  src: url('/fonts/Marianne-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Marianne';
+  src: url('/fonts/Marianne-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Marque */
   --color-primary:        #185FA5;
   --color-primary-hover:  #0C447C;
   --color-primary-rgb:    24, 95, 165;
   --color-accent-bg:      #E6F1FB;
+  --font-family:          system-ui, sans-serif;
 
   /* Fonds */
   --color-bg-page:    #f5f5f3;
@@ -278,6 +303,7 @@
   --color-primary-hover:  #1212ff;
   --color-primary-rgb:    0, 0, 145;
   --color-accent-bg:      #f5f5fe;
+  --font-family:          'Marianne', Arial, sans-serif;
 
   --color-bg-page:    #f6f6f6;
   --color-bg-surface: #fff;
