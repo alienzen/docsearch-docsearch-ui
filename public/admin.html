@@ -10,10 +10,15 @@
     .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
               display: flex; align-items: center; gap: 16px; }
     .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
-    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+    .header-nav { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+    .header a { font-size: 14px; color: #185FA5; text-decoration: none; }
+    .header-user { color: #888; font-size: 13px; }
 
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex;
-                 flex-direction: column; gap: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .link-button { background: none; border: none; color: #185FA5; font-size: 14px;
+                   cursor: pointer; padding: 0; font-family: inherit; }
+    #app { display: flex; flex-direction: column; gap: 24px; }
 
     .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
     .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
@@ -88,16 +93,21 @@
 <body>
   <header class="header">
     <span class="logo">DocSearch — Administration</span>
-    <span id="current-user" style="margin-left:auto; color:#888; font-size:13px;"></span>
-    <button id="toggle-all-panels" onclick="toggleAllPanels()"
-            style="background:none;border:none;color:#185FA5;font-size:14px;cursor:pointer;padding:0;font-family:inherit;">Tout replier</button>
-    <a href="/admin-help.html">Aide</a>
-    <a href="/stats.html">Statistiques</a>
-    <a href="/">← Recherche</a>
+    <nav class="header-nav">
+      <a href="/admin-help.html">Aide</a>
+      <a href="/stats.html">Statistiques</a>
+      <a href="/">← Recherche</a>
+    </nav>
+    <span id="current-user" class="header-user"></span>
   </header>
 
-  <div class="container" id="app">
-    <p class="muted">Chargement…</p>
+  <div class="container">
+    <div class="toolbar">
+      <button id="toggle-all-panels" onclick="toggleAllPanels()" class="link-button">Tout replier</button>
+    </div>
+    <div id="app">
+      <p class="muted">Chargement…</p>
+    </div>
   </div>
 
   <script>
@@ -227,11 +237,31 @@
       return res.json();
     }
 
+    // Même bascules que index.html (show_current_user_enabled/
+    // show_current_user_groups_enabled, voir docsearch-api/ui_config.py) —
+    // uiConfigCache est rempli par renderUiConfig() (dans refresh()),
+    // currentUserCache par loadCurrentUser() ; les deux tournent en
+    // parallèle (voir refresh()/loadCurrentUser() tout en bas), d'où
+    // updateCurrentUserBadge() appelée des deux côtés pour rester correct
+    // quel que soit l'ordre de résolution.
+    let uiConfigCache = { show_current_user_enabled: true, show_current_user_groups_enabled: true };
+    let currentUserCache = { user: null, groups: [] };
+
+    function updateCurrentUserBadge() {
+      const el = document.getElementById('current-user');
+      el.style.display = uiConfigCache.show_current_user_enabled ? '' : 'none';
+      if (!currentUserCache.user) return;
+      const groupsSuffix = (uiConfigCache.show_current_user_groups_enabled && currentUserCache.groups.length)
+        ? ` · ${currentUserCache.groups.join(', ')}`
+        : '';
+      el.textContent = `Connecté : ${currentUserCache.user}${groupsSuffix}`;
+    }
+
     async function loadCurrentUser() {
       try {
         const res = await api('/is-admin');
-        const groupsSuffix = res.groups && res.groups.length ? ` · ${res.groups.join(', ')}` : '';
-        document.getElementById('current-user').textContent = `Connecté : ${res.user}${groupsSuffix}`;
+        currentUserCache = { user: res.user, groups: res.groups || [] };
+        updateCurrentUserBadge();
       } catch (e) {
         // Échec silencieux (API indisponible) : le reste de la page gère
         // déjà l'affichage d'erreur via refresh()/renderStatus().
@@ -472,6 +502,8 @@
     // ── Interface (bascules sans rapport avec la satisfaction) ───
     async function renderUiConfig() {
       const cfg = await api('/ui-config');
+      uiConfigCache = cfg;
+      updateCurrentUserBadge();
       const body = `
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
@@ -530,7 +562,13 @@
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-show-user" ${cfg.show_current_user_enabled ? 'checked' : ''} />
-              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête de recherche
+              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête (recherche et administration)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-show-user-groups" ${cfg.show_current_user_groups_enabled ? 'checked' : ''} />
+              Inclure les groupes LDAP dans ce badge ("· &lt;groupes&gt;")
             </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
@@ -620,10 +658,27 @@
       });
       document.getElementById('ui-show-user')?.addEventListener('change', async (e) => {
         const checked = e.target.checked;
+        uiConfigCache.show_current_user_enabled = checked;
+        updateCurrentUserBadge();
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
+          uiConfigCache.show_current_user_enabled = !checked;
+          updateCurrentUserBadge();
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-show-user-groups')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        uiConfigCache.show_current_user_groups_enabled = checked;
+        updateCurrentUserBadge();
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_groups_enabled: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          uiConfigCache.show_current_user_groups_enabled = !checked;
+          updateCurrentUserBadge();
           alert(`Erreur : ${err.message}`);
         }
       });

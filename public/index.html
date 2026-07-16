@@ -498,8 +498,13 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true };
     let isAdminCache = false;
+    // Rempli par loadIsAdmin() — séparé de uiConfigCache (qui ne porte que
+    // des bascules) pour que updateCurrentUserText() puisse recalculer le
+    // texte du badge si show_current_user_groups_enabled résout APRES
+    // /is-admin, sans dépendre de l'ordre des deux appels parallèles.
+    let currentUserCache = { user: null, groups: [] };
 
     function updateAdminLinksVisibility() {
       const display = (isAdminCache && uiConfigCache.admin_links_enabled) ? '' : 'none';
@@ -514,6 +519,18 @@
     // correct quel que soit l'ordre de résolution des deux appels.
     function updateCurrentUserVisibility() {
       document.getElementById('current-user').style.display = uiConfigCache.show_current_user_enabled ? '' : 'none';
+    }
+
+    // Texte du badge — séparé de la visibilité ci-dessus car
+    // show_current_user_groups_enabled ne masque que le suffixe
+    // " · <groupes>", pas le badge entier. Même raison de double appel
+    // (loadUiConfig() ET loadIsAdmin()) que updateCurrentUserVisibility().
+    function updateCurrentUserText() {
+      if (!currentUserCache.user) return;
+      const groupsSuffix = (uiConfigCache.show_current_user_groups_enabled && currentUserCache.groups.length)
+        ? ` · ${currentUserCache.groups.join(', ')}`
+        : '';
+      document.getElementById('current-user').textContent = `Connecté : ${currentUserCache.user}${groupsSuffix}`;
     }
 
     // Bascules d'interface sans rapport avec la satisfaction (ex:
@@ -537,6 +554,7 @@
       document.getElementById('sort-select-wrap').style.display = uiConfigCache.sort_enabled ? '' : 'none';
       updateAdminLinksVisibility();
       updateCurrentUserVisibility();
+      updateCurrentUserText();
     }
 
     // Ces pages exigent déjà elles-mêmes le groupe admin (403 sinon) —
@@ -547,8 +565,8 @@
       try {
         const res = await api('/is-admin');
         isAdminCache = res.is_admin;
-        const groupsSuffix = res.groups && res.groups.length ? ` · ${res.groups.join(', ')}` : '';
-        document.getElementById('current-user').textContent = `Connecté : ${res.user}${groupsSuffix}`;
+        currentUserCache = { user: res.user, groups: res.groups || [] };
+        updateCurrentUserText();
       } catch (e) {
         // Échec silencieux (API indisponible) : les liens restent masqués par défaut.
       }
