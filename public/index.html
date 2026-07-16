@@ -4,12 +4,18 @@
   <meta charset="UTF-8" />
   <title>DocSearch — Explorez, trouvez, comprenez</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/theme.css" />
+  <link rel="stylesheet" href="/theme-search.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
     body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text);
            min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Gabarit commun à toutes les icônes SVG inline (voir ICON_XXX plus
+       loin) : même taille et alignement partout, qu'elles remplacent un
+       ancien "ti ti-*" (police jamais chargée, invisible) ou un emoji
+       d'en-tête. */
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
 
     .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 12px 24px;
               display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; z-index: 10;
@@ -31,7 +37,7 @@
                  background: var(--color-bg-surface); color: var(--color-text-muted); cursor: pointer; font-size: 13px; }
     .btn-reset:hover { background: var(--color-bg-page); color: var(--color-text-secondary); }
     .header-links { display: flex; gap: 16px; align-items: center; justify-content: flex-end; }
-    .header-links a { font-size: 14px; text-decoration: none; }
+    .header-links a { font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
     #current-user { background: var(--color-bg-hover); color: var(--color-text-muted); padding: 4px 10px; border-radius: 99px;
                     font-size: 12px; margin-left: auto; white-space: nowrap; }
 
@@ -56,7 +62,8 @@
 
     .saved-wrap { position: relative; }
     .saved-toggle { font-size: 14px; color: var(--color-primary); text-decoration: none; background: none;
-                    border: none; cursor: pointer; font-family: inherit; }
+                    border: none; cursor: pointer; font-family: inherit;
+                    display: inline-flex; align-items: center; gap: 6px; }
     .saved-panel { display: none; position: absolute; top: 28px; right: 0; width: 320px;
                    max-height: 380px; overflow-y: auto; background: var(--color-bg-surface); border: 1px solid var(--color-border);
                    border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
@@ -182,7 +189,6 @@
     .copy-icon-btn { flex-shrink: 0; border: none; background: none; color: var(--color-text-faint-2); cursor: pointer;
                      width: 22px; height: 22px; padding: 0; border-radius: 5px; display: inline-flex;
                      align-items: center; justify-content: center; }
-    .copy-icon-btn svg { width: 14px; height: 14px; }
     .copy-icon-btn:hover { background: var(--color-bg-hover); color: var(--color-primary); }
     .copy-icon-btn.copied { color: var(--color-success); }
 
@@ -193,7 +199,7 @@
     .page-btn:hover { background: var(--color-bg-hover); }
     .page-btn.active { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
     .empty { text-align: center; color: var(--color-text-faint); padding: 60px 0; }
-    .empty i { font-size: 32px; display: block; margin-bottom: 10px; }
+    .empty svg { width: 32px; height: 32px; display: block; margin: 0 auto 10px; }
 
     .footer { border-top: 1px solid var(--color-border); margin-top: 32px; padding: 20px 24px 28px;
               display: flex; align-items: center; justify-content: space-between;
@@ -274,19 +280,19 @@
     </div>
     <div class="header-links">
       <div class="saved-wrap">
-        <button class="saved-toggle" onclick="toggleSavedPanel()">★ Mes recherches</button>
+        <button class="saved-toggle" onclick="toggleSavedPanel()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.3 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.3 6.1-.7z"/></svg>Mes recherches</button>
         <div class="saved-panel" id="saved-panel"></div>
       </div>
       <div class="saved-wrap" id="collections-wrap" style="display:none;">
-        <button class="saved-toggle" onclick="toggleMyCollectionsPanel()">📋 Mes collections</button>
+        <button class="saved-toggle" onclick="toggleMyCollectionsPanel()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3" rx="1"/><path d="M9 11h6M9 15h6"/></svg>Mes collections</button>
         <div class="saved-panel" id="collections-panel"></div>
       </div>
       <div class="saved-wrap" id="alerts-wrap" style="display:none;">
-        <button class="saved-toggle" onclick="toggleAlertsPanel()">🔔 Alertes<span class="alerts-badge" id="alerts-badge" style="display:none;"></span></button>
+        <button class="saved-toggle" onclick="toggleAlertsPanel()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>Alertes<span class="alerts-badge" id="alerts-badge" style="display:none;"></span></button>
         <div class="saved-panel" id="alerts-panel"></div>
       </div>
-      <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
-      <a href="/help" id="help-link" target="_blank" style="color:var(--color-primary);">❓ Aide</a>
+      <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>Suggérer une idée</button>
+      <a href="/help" id="help-link" target="_blank" style="color:var(--color-primary);"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6 1.3c0 1.5-2.1 1.7-2.1 3.2"/><path d="M12 17h.01"/></svg>Aide</a>
       <a href="/chat" id="chat-link" style="color:var(--color-primary); display:none;">Assistant IA →</a>
       <a href="/admin.html" id="admin-link" style="color:var(--color-text-faint); display:none;">Administration</a>
     </div>
@@ -770,14 +776,30 @@
     }
 
     // Icônes en SVG inline plutôt qu'une police d'icônes (aucune n'est
-    // chargée dans ce projet — les classes "ti ti-*" utilisées ailleurs
-    // ne rendent rien visuellement) : ces deux boutons n'ont que leur
-    // icône comme contenu, sans texte de secours, donc ils doivent
-    // fonctionner sans dépendance externe.
-    const ICON_FOLDER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h5l2 3h9a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-13a1 1 0 0 1 1 -1"/></svg>';
-    const ICON_COPY   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8v-3a1 1 0 0 0 -1 -1h-9a1 1 0 0 0 -1 1v9a1 1 0 0 0 1 1h3"/></svg>';
-    const ICON_CHECK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg>';
-    const ICON_X      = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
+    // chargée dans ce projet — les classes "ti ti-*" utilisées un peu
+    // partout dans les cartes de résultat et les modales ne rendaient
+    // RIEN visuellement jusqu'ici, silencieusement). Toutes réunies ici
+    // plutôt qu'un ICON_XXX isolé par cas d'usage, avec une classe
+    // "icon" commune (voir règle svg.icon plus bas) pour un gabarit et
+    // un alignement homogènes partout où elles apparaissent.
+    const ICON_FOLDER       = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h5l2 3h9a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-13a1 1 0 0 1 1 -1"/></svg>';
+    const ICON_COPY         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8v-3a1 1 0 0 0 -1 -1h-9a1 1 0 0 0 -1 1v9a1 1 0 0 0 1 1h3"/></svg>';
+    const ICON_CHECK        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l10 -10"/></svg>';
+    const ICON_X            = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg>';
+    const ICON_USER         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>';
+    const ICON_CALENDAR     = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/></svg>';
+    const ICON_CALENDAR_PLUS = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M12 13v5"/><path d="M9.5 15.5h5"/></svg>';
+    const ICON_FILE         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/></svg>';
+    const ICON_FILE_ZIP     = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/><path d="M11 9v1M11 12v1M11 15v1M11 18v1"/></svg>';
+    const ICON_LOCK         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+    const ICON_PHONE        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5l1.5-2.5 5 2v3a1 1 0 0 1-1 1c-8 0-14-6-14-14a1 1 0 0 1 1-1"/></svg>';
+    const ICON_BUILDING     = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="10" height="18"/><path d="M15 21v-4h4v4"/><path d="M8 7h1M11 7h1M8 11h1M11 11h1M8 15h1M11 15h1"/></svg>';
+    const ICON_SEARCH_OFF   = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20"/><path d="M4 4l16 16"/></svg>';
+    const ICON_INFO_CIRCLE  = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v5h1"/></svg>';
+    const ICON_EYE          = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const ICON_TAGS         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/></svg>';
+    const ICON_WORLD        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18"/></svg>';
+    const ICON_ROUTE        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h4"/></svg>';
 
     function fmtSize(bytes) {
       if (!bytes) return '—';
@@ -1058,7 +1080,7 @@
       const card = document.getElementById('suggestion-card');
       card.innerHTML = `
         <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
-        <p style="font-weight:600;font-size:15px;margin-bottom:6px;">💡 Suggérer une idée</p>
+        <p style="font-weight:600;font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>Suggérer une idée</p>
         <p style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
         <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid var(--color-border-input);border-radius:8px;font-size:13px;margin-bottom:10px;">
           <option value="idea">Idée / amélioration</option>
@@ -1106,7 +1128,7 @@
         (q ? ` pour « ${q} »` : '');
 
       if (!data.results.length) {
-        box.innerHTML = '<p class="empty"><i class="ti ti-search-off" aria-hidden="true"></i>Aucun résultat ne correspond à ces critères.</p>';
+        box.innerHTML = `<p class="empty">${ICON_SEARCH_OFF}Aucun résultat ne correspond à ces critères.</p>`;
         document.getElementById('pagination').innerHTML = '';
         return;
       }
@@ -1179,13 +1201,13 @@
             <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
               <span class="result-title" style="margin-bottom:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.filename}</span>
               ${sourceNote}
-              ${fields.has('author') && r.author ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-user" aria-hidden="true"></i> ${r.author}</span>` : ''}
-              ${fields.has('date_modified') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-calendar" aria-hidden="true"></i> ${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
-              ${fields.has('folder') && r.folder ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-folder" aria-hidden="true"></i> ${r.folder}</span>` : ''}
-              ${fields.has('size') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-file" aria-hidden="true"></i> ${fmtSize(r.size)}</span>` : ''}
-              ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-lock" aria-hidden="true"></i> ${r.acl.groups[0]}</span>` : ''}
-              ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-phone" aria-hidden="true"></i> ${r.telephone}</span>` : ''}
-              ${fields.has('bureau') && r.bureau ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-building" aria-hidden="true"></i> ${r.bureau}</span>` : ''}
+              ${fields.has('author') && r.author ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_USER}${r.author}</span>` : ''}
+              ${fields.has('date_modified') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_CALENDAR}${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
+              ${fields.has('folder') && r.folder ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_FOLDER}${r.folder}</span>` : ''}
+              ${fields.has('size') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_FILE}${fmtSize(r.size)}</span>` : ''}
+              ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_LOCK}${r.acl.groups[0]}</span>` : ''}
+              ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_PHONE}${r.telephone}</span>` : ''}
+              ${fields.has('bureau') && r.bureau ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;">${ICON_BUILDING}${r.bureau}</span>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
           </div>
@@ -1198,7 +1220,7 @@
       const snippets = (r.highlight || []).join(' … ');
       const isArchiveMember = (r.filepath || '').includes('::');
       const archiveNote = isArchiveMember
-        ? `<span class="archive-badge"><i class="ti ti-file-zip" aria-hidden="true" style="font-size:12px;"></i>Extrait d'une archive</span>`
+        ? `<span class="archive-badge">${ICON_FILE_ZIP}Extrait d'une archive</span>`
         : '';
       const bodyIndent = showSelectCb ? 75 : 48;
       return `
@@ -1215,18 +1237,18 @@
         <div class="result-body">
           <div class="result-meta" style="margin-left:${bodyIndent}px;">
             ${sourceNote}
-            ${fields.has('author') && r.author ? `<span><i class="ti ti-user" aria-hidden="true"></i>${r.author}</span>` : ''}
-            ${fields.has('date_modified') ? `<span><i class="ti ti-calendar" aria-hidden="true"></i>${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
-            ${fields.has('folder') && r.folder ? `<span><i class="ti ti-folder" aria-hidden="true"></i>${r.folder}</span>` : ''}
-            ${fields.has('size') ? `<span><i class="ti ti-file" aria-hidden="true"></i>${fmtSize(r.size)}</span>` : ''}
-            ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span><i class="ti ti-lock" aria-hidden="true"></i>${r.acl.groups[0]}</span>` : ''}
-            ${fields.has('telephone') && r.telephone ? `<span><i class="ti ti-phone" aria-hidden="true"></i>${r.telephone}</span>` : ''}
-            ${fields.has('bureau') && r.bureau ? `<span><i class="ti ti-building" aria-hidden="true"></i>${r.bureau}</span>` : ''}
+            ${fields.has('author') && r.author ? `<span>${ICON_USER}${r.author}</span>` : ''}
+            ${fields.has('date_modified') ? `<span>${ICON_CALENDAR}${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
+            ${fields.has('folder') && r.folder ? `<span>${ICON_FOLDER}${r.folder}</span>` : ''}
+            ${fields.has('size') ? `<span>${ICON_FILE}${fmtSize(r.size)}</span>` : ''}
+            ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span>${ICON_LOCK}${r.acl.groups[0]}</span>` : ''}
+            ${fields.has('telephone') && r.telephone ? `<span>${ICON_PHONE}${r.telephone}</span>` : ''}
+            ${fields.has('bureau') && r.bureau ? `<span>${ICON_BUILDING}${r.bureau}</span>` : ''}
             ${archiveNote}
           </div>
           ${fields.has('filepath') && r.filepath ? `
             <div class="result-path" style="margin-left:${bodyIndent}px;" title="${escapeHtml(r.filepath)}">
-              <i class="ti ti-route" aria-hidden="true"></i>
+              ${ICON_ROUTE}
               <span class="path-text">${r.filepath}</span>
               <button class="copy-icon-btn" data-path="${escapeHtml(r.filepath)}" data-copy="dir"
                       onclick="copyPathClick(event);"
@@ -2033,14 +2055,14 @@
       }
 
       const previewBanner = isArchiveMember
-        ? `<div class="modal-banner"><i class="ti ti-info-circle" aria-hidden="true" style="margin-top:1px;"></i>
+        ? `<div class="modal-banner">${ICON_INFO_CIRCLE}
              Aperçu non disponible : ce document n'existe que temporairement pendant l'indexation de l'archive.</div>`
         : `<a class="modal-preview-btn" href="/api/preview/${id}" target="_blank">
-             <i class="ti ti-eye" aria-hidden="true"></i> Voir l'aperçu</a>`;
+             ${ICON_EYE}Voir l'aperçu</a>`;
 
       const aclGroups = (doc.acl && doc.acl.groups) || [];
       const aclGroupsHtml = aclGroups.map(g =>
-        `<span class="acl-tag"><i class="ti ti-lock" aria-hidden="true"></i>Groupe : ${g}</span>`
+        `<span class="acl-tag">${ICON_LOCK}Groupe : ${g}</span>`
       ).join('');
 
       // Édition des mots-clés réservée aux documents de type fichier
@@ -2075,18 +2097,18 @@
         </div>
         ${previewBanner}
         <div style="margin-top:16px;">
-          <div class="modal-row"><span class="k"><i class="ti ti-user" aria-hidden="true"></i>Auteur</span><span class="v">${doc.author || '—'}</span></div>
+          <div class="modal-row"><span class="k">${ICON_USER}Auteur</span><span class="v">${doc.author || '—'}</span></div>
           <div class="modal-row" style="align-items:flex-start;">
-            <span class="k"><i class="ti ti-tags" aria-hidden="true"></i>Mots-clés</span>
+            <span class="k">${ICON_TAGS}Mots-clés</span>
             <span class="v" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
               <span style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;">${keywordsHtml}</span>
               ${keywordsAddHtml}
             </span>
           </div>
-          <div class="modal-row"><span class="k"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
-          <div class="modal-row"><span class="k"><i class="ti ti-calendar" aria-hidden="true"></i>Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
+          <div class="modal-row"><span class="k">${ICON_CALENDAR_PLUS}Créé le</span><span class="v">${doc.date_created ? doc.date_created.slice(0,10) : '—'}</span></div>
+          <div class="modal-row"><span class="k">${ICON_CALENDAR}Modifié le</span><span class="v">${doc.date_modified ? doc.date_modified.slice(0,10) : '—'}</span></div>
           <div class="modal-row">
-            <span class="k"><i class="ti ti-folder" aria-hidden="true"></i>Dossier</span>
+            <span class="k">${ICON_FOLDER}Dossier</span>
             <span class="v" style="display:inline-flex;align-items:center;gap:2px;">
               ${doc.folder || '—'}
               ${doc.filepath ? `
@@ -2098,15 +2120,15 @@
                         title="Copier le chemin complet" aria-label="Copier le chemin complet">${ICON_COPY}</button>` : ''}
             </span>
           </div>
-          <div class="modal-row"><span class="k"><i class="ti ti-file" aria-hidden="true"></i>Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
-          ${isArchiveMember ? `<div class="modal-row"><span class="k"><i class="ti ti-file-zip" aria-hidden="true"></i>Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
+          <div class="modal-row"><span class="k">${ICON_FILE}Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
+          ${isArchiveMember ? `<div class="modal-row"><span class="k">${ICON_FILE_ZIP}Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
         </div>
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-bg-hover);">
           <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-text-faint);margin-bottom:8px;">Droits d'accès</p>
           <div class="modal-acl">
-            ${doc.acl && doc.acl.owner ? `<span class="acl-tag"><i class="ti ti-user" aria-hidden="true"></i>Propriétaire : ${doc.acl.owner}</span>` : ''}
+            ${doc.acl && doc.acl.owner ? `<span class="acl-tag">${ICON_USER}Propriétaire : ${doc.acl.owner}</span>` : ''}
             ${aclGroupsHtml}
-            ${doc.acl && doc.acl.public ? `<span class="acl-tag"><i class="ti ti-world" aria-hidden="true"></i>Public</span>` : ''}
+            ${doc.acl && doc.acl.public ? `<span class="acl-tag">${ICON_WORLD}Public</span>` : ''}
           </div>
         </div>`;
     }

@@ -1,13 +1,9 @@
-/* ── Thème DocSearch ──────────────────────────────────────────
-   Variables CSS partagées entre index.html et admin.html — un seul
-   endroit pour faire évoluer les couleurs (rebranding, thème sombre...)
-   sans reproduire le changement dans chaque fichier.
-
-   Ne couvre PAS la palette de catégorisation par type de fichier/source
-   (EXT_COLORS / SOURCE_PALETTE dans index.html) : ces teintes distinguent
-   des catégories de contenu entre elles, elles ne représentent pas
-   l'identité visuelle de l'appli et n'ont pas vocation à changer avec
-   le thème.
+/* ── Thème DocSearch — administration (admin.html) ────────────
+   Variables CSS propres à admin.html — système de theming séparé de
+   celui d'index.html (theme-search.css) : les deux pages peuvent
+   évoluer indépendamment (palette, densité...) sans se marcher dessus.
+   Valeurs identiques aux deux fichiers au moment de la séparation ;
+   rien n'empêche de les faire diverger ensuite.
 */
 
 :root {
