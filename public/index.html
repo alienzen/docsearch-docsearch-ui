@@ -4,34 +4,35 @@
   <meta charset="UTF-8" />
   <title>DocSearch — Explorez, trouvez, comprenez</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/theme.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18;
+    body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text);
            min-height: 100vh; display: flex; flex-direction: column; }
 
-    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 12px 24px;
+    .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 12px 24px;
               display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; z-index: 10;
               flex-shrink: 0; }
     .header-top { display: flex; align-items: center; gap: 16px; }
-    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
+    .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
     .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; }
     /* Combinateur d'enfant direct (>) plutôt qu'un sélecteur descendant :
        .sources-select-panel (cases à cocher) est aussi niché dans
        .search-wrap, plusieurs niveaux plus profond — un sélecteur
        "input" générique les attrapait par erreur (flex:1, gros padding). */
-    .search-wrap > input { flex: 1; padding: 8px 14px; border: 1px solid #d5d5ce;
+    .search-wrap > input { flex: 1; padding: 8px 14px; border: 1px solid var(--color-border-input);
                          border-radius: 8px; font-size: 15px; outline: none; }
-    .search-wrap > input:focus { border-color: #185FA5; }
-    .btn-primary { padding: 8px 18px; background: #185FA5; color: #fff; border: none;
+    .search-wrap > input:focus { border-color: var(--color-primary); }
+    .btn-primary { padding: 8px 18px; background: var(--color-primary); color: var(--color-bg-surface); border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
-    .btn-primary:hover { background: #0C447C; }
-    .btn-reset { padding: 8px 14px; border-radius: 8px; border: 1px solid #d5d5ce;
-                 background: #fff; color: #666; cursor: pointer; font-size: 13px; }
-    .btn-reset:hover { background: #f5f5f3; color: #333; }
+    .btn-primary:hover { background: var(--color-primary-hover); }
+    .btn-reset { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--color-border-input);
+                 background: var(--color-bg-surface); color: var(--color-text-muted); cursor: pointer; font-size: 13px; }
+    .btn-reset:hover { background: var(--color-bg-page); color: var(--color-text-secondary); }
     .header-links { display: flex; gap: 16px; align-items: center; justify-content: flex-end; }
     .header-links a { font-size: 14px; text-decoration: none; }
-    #current-user { background: #f0f0ec; color: #666; padding: 4px 10px; border-radius: 99px;
+    #current-user { background: var(--color-bg-hover); color: var(--color-text-muted); padding: 4px 10px; border-radius: 99px;
                     font-size: 12px; margin-left: auto; white-space: nowrap; }
 
     /* ── Présélection de sources (avant recherche) ────────────── */
@@ -41,217 +42,217 @@
        étirement à son tour, plutôt que de garder sa hauteur naturelle et
        flotter mal aligné en haut de son enveloppe. */
     .sources-select-wrap { position: relative; display: flex; flex-shrink: 0; }
-    .sources-select-toggle { padding: 8px 10px; border: 1px solid #d5d5ce; border-radius: 8px;
-                              font-size: 13px; font-family: inherit; background: #fff; color: #555; cursor: pointer;
+    .sources-select-toggle { padding: 8px 10px; border: 1px solid var(--color-border-input); border-radius: 8px;
+                              font-size: 13px; font-family: inherit; background: var(--color-bg-surface); color: var(--color-text-mid); cursor: pointer;
                               white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .sources-select-panel { display: none; position: absolute; top: 38px; left: 0; min-width: 220px;
-                             max-height: 280px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
+                             max-height: 280px; overflow-y: auto; background: var(--color-bg-surface); border: 1px solid var(--color-border);
                              border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
     .sources-select-panel.open { display: block; }
     .sources-select-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
-                            cursor: pointer; font-size: 13px; color: #333; }
-    .sources-select-item:hover { background: #f5f5f3; }
+                            cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
+    .sources-select-item:hover { background: var(--color-bg-page); }
     .sources-select-item input { flex-shrink: 0; }
 
     .saved-wrap { position: relative; }
-    .saved-toggle { font-size: 14px; color: #185FA5; text-decoration: none; background: none;
+    .saved-toggle { font-size: 14px; color: var(--color-primary); text-decoration: none; background: none;
                     border: none; cursor: pointer; font-family: inherit; }
     .saved-panel { display: none; position: absolute; top: 28px; right: 0; width: 320px;
-                   max-height: 380px; overflow-y: auto; background: #fff; border: 1px solid #e5e5e0;
+                   max-height: 380px; overflow-y: auto; background: var(--color-bg-surface); border: 1px solid var(--color-border);
                    border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
     .saved-panel.open { display: block; }
-    .saved-empty { font-size: 12px; color: #888; padding: 12px 10px; text-align: center; }
+    .saved-empty { font-size: 12px; color: var(--color-text-faint); padding: 12px 10px; text-align: center; }
     .saved-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
                   cursor: pointer; }
-    .saved-item:hover { background: #f5f5f3; }
+    .saved-item:hover { background: var(--color-bg-page); }
     .saved-item-main { flex: 1; min-width: 0; }
-    .saved-item-name { font-size: 13px; font-weight: 600; color: #1a1a18; white-space: nowrap;
+    .saved-item-name { font-size: 13px; font-weight: 600; color: var(--color-text); white-space: nowrap;
                         overflow: hidden; text-overflow: ellipsis; }
-    .saved-item-query { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden;
+    .saved-item-query { font-size: 11px; color: var(--color-text-faint); white-space: nowrap; overflow: hidden;
                          text-overflow: ellipsis; }
     .saved-item-criteria { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-    .saved-crit-tag { font-size: 10px; background: #f0f0ec; color: #666; padding: 2px 7px;
+    .saved-crit-tag { font-size: 10px; background: var(--color-bg-hover); color: var(--color-text-muted); padding: 2px 7px;
                        border-radius: 99px; white-space: nowrap; }
-    .saved-item-delete { flex-shrink: 0; border: none; background: none; color: #aaa; cursor: pointer;
+    .saved-item-delete { flex-shrink: 0; border: none; background: none; color: var(--color-text-faint-2); cursor: pointer;
                           width: 22px; height: 22px; border-radius: 5px; display: inline-flex;
                           align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
-    .saved-item-delete:hover { background: #fff0f0; color: #c92a2a; }
+    .saved-item-delete:hover { background: var(--color-error-bg); color: var(--color-danger); }
     .saved-item-alert { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: default; }
-    .alert-toggle-label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #666;
+    .alert-toggle-label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-muted);
                            cursor: pointer; white-space: nowrap; }
-    .alert-frequency { font-size: 11px; color: #666; border: 1px solid #e5e5e0; border-radius: 5px;
-                        padding: 1px 4px; background: #fff; }
+    .alert-frequency { font-size: 11px; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: 5px;
+                        padding: 1px 4px; background: var(--color-bg-surface); }
     .alerts-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px;
-                    height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 99px; background: #c92a2a;
-                    color: #fff; font-size: 10px; font-weight: 700; line-height: 1; vertical-align: middle; }
+                    height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 99px; background: var(--color-danger);
+                    color: var(--color-bg-surface); font-size: 10px; font-weight: 700; line-height: 1; vertical-align: middle; }
     .alert-item { cursor: pointer; }
 
     .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; width: 100%; flex: 1; }
     .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; min-height: 24px; }
     .active-filter-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-                          padding: 4px 6px 4px 12px; border-radius: 99px; background: #E6F1FB; color: #185FA5; }
-    .active-filter-chip button { background: none; border: none; color: #185FA5; cursor: pointer;
+                          padding: 4px 6px 4px 12px; border-radius: 99px; background: var(--color-accent-bg); color: var(--color-primary); }
+    .active-filter-chip button { background: none; border: none; color: var(--color-primary); cursor: pointer;
                                  display: flex; padding: 2px; }
     .active-filter-chip button svg { width: 12px; height: 12px; }
 
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
     @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
 
-    .sidebar { background: #fff; border: 1px solid #e5e5e0; border-radius: 12px; padding: 16px;
+    .sidebar { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px;
                height: fit-content; position: sticky; top: 76px; }
     .facet-section { margin-bottom: 18px; }
     .facet-section:last-child { margin-bottom: 0; }
     .facet-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-                   color: #888; margin-bottom: 8px; display: flex; align-items: center;
+                   color: var(--color-text-faint); margin-bottom: 8px; display: flex; align-items: center;
                    justify-content: space-between; cursor: pointer; user-select: none; }
-    .facet-caret { font-size: 9px; color: #aaa; transition: transform 0.15s; flex-shrink: 0; }
+    .facet-caret { font-size: 9px; color: var(--color-text-faint-2); transition: transform 0.15s; flex-shrink: 0; }
     .facet-section.collapsed .facet-caret { transform: rotate(-90deg); }
     .facet-section.collapsed .facet-body { display: none; }
     .facet-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 6px;
-                 border-radius: 6px; cursor: pointer; font-size: 13px; color: #333; }
-    .facet-row:hover { background: #f0f0ec; }
-    .facet-row.active { background: #E6F1FB; color: #185FA5; font-weight: 500; }
-    .facet-count { font-size: 11px; background: #f0f0ec; color: #888; padding: 1px 6px; border-radius: 99px; }
-    .facet-row.active .facet-count { background: transparent; color: #185FA5; }
-    .facet-empty { font-size: 12px; color: #aaa; padding: 4px 6px; }
+                 border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
+    .facet-row:hover { background: var(--color-bg-hover); }
+    .facet-row.active { background: var(--color-accent-bg); color: var(--color-primary); font-weight: 500; }
+    .facet-count { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-faint); padding: 1px 6px; border-radius: 99px; }
+    .facet-row.active .facet-count { background: transparent; color: var(--color-primary); }
+    .facet-empty { font-size: 12px; color: var(--color-text-faint-2); padding: 4px 6px; }
     .date-range { display: flex; flex-direction: column; gap: 6px; }
-    .date-range label { font-size: 11px; color: #aaa; }
-    .date-range input { font-size: 12px; height: 30px; padding: 4px 8px; border: 1px solid #d5d5ce;
+    .date-range label { font-size: 11px; color: var(--color-text-faint-2); }
+    .date-range input { font-size: 12px; height: 30px; padding: 4px 8px; border: 1px solid var(--color-border-input);
                         border-radius: 6px; width: 100%; }
-    .clear-link { font-size: 11px; color: #185FA5; cursor: pointer; background: none; border: none;
+    .clear-link { font-size: 11px; color: var(--color-primary); cursor: pointer; background: none; border: none;
                   padding: 0; margin-top: 4px; text-decoration: underline; }
 
     .stats-bar { display: flex; justify-content: space-between; align-items: center;
-                 margin-bottom: 12px; font-size: 13px; color: #666; }
-    .sort-select { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
-    .sort-select select { border: 1px solid #d5d5ce; border-radius: 6px; padding: 4px 8px;
-                          font-size: 13px; background: #fff; cursor: pointer; }
+                 margin-bottom: 12px; font-size: 13px; color: var(--color-text-muted); }
+    .sort-select { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-mid); }
+    .sort-select select { border: 1px solid var(--color-border-input); border-radius: 6px; padding: 4px 8px;
+                          font-size: 13px; background: var(--color-bg-surface); cursor: pointer; }
 
-    .result-card { background: #fff; border: 1px solid #e5e5e0; border-radius: 12px; padding: 16px;
+    .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px;
                    margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
     .result-card-compact { padding: 8px 16px; margin-bottom: 4px; }
     .result-card-compact .result-header { margin-bottom: 0; cursor: pointer; }
-    .result-card:hover { border-color: #85B7EB; box-shadow: 0 2px 8px rgba(24,95,165,0.08); }
-    .result-card.kbd-focus { border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.25); }
+    .result-card:hover { border-color: var(--color-border-hover); box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.08); }
+    .result-card.kbd-focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb),0.25); }
     .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px;
                      cursor: pointer; user-select: none; }
     .result-card.collapsed .result-header { margin-bottom: 0; }
-    .result-caret { font-size: 10px; color: #aaa; flex-shrink: 0; transition: transform 0.15s; margin-top: 4px; }
+    .result-caret { font-size: 10px; color: var(--color-text-faint-2); flex-shrink: 0; transition: transform 0.15s; margin-top: 4px; }
     .result-card.collapsed .result-caret { transform: rotate(-90deg); }
     .result-card.collapsed .result-body { display: none; }
     .ext-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
                 justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-    .result-title { font-size: 15px; font-weight: 600; color: #185FA5; margin-bottom: 4px; }
-    .result-meta { display: flex; gap: 14px; font-size: 12px; color: #888; flex-wrap: wrap; }
+    .result-title { font-size: 15px; font-weight: 600; color: var(--color-primary); margin-bottom: 4px; }
+    .result-meta { display: flex; gap: 14px; font-size: 12px; color: var(--color-text-faint); flex-wrap: wrap; }
     .result-meta span { display: flex; align-items: center; gap: 4px; }
     .source-badge { display: flex; align-items: center; gap: 5px; }
     .source-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center;
                   justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
-    .highlight { background: #FFF200; color: #1a1a18; padding: 0 3px; border-radius: 3px; font-weight: 600; }
-    .snippet { font-size: 13px; color: #555; line-height: 1.65; margin-top: 8px;
-               border-left: 3px solid #E6F1FB; padding-left: 12px; }
-    .score-pill { font-size: 11px; color: #888; background: #f5f5f3; padding: 2px 8px;
+    .highlight { background: var(--color-highlight-bg); color: var(--color-text); padding: 0 3px; border-radius: 3px; font-weight: 600; }
+    .snippet { font-size: 13px; color: var(--color-text-mid); line-height: 1.65; margin-top: 8px;
+               border-left: 3px solid var(--color-accent-bg); padding-left: 12px; }
+    .score-pill { font-size: 11px; color: var(--color-text-faint); background: var(--color-bg-page); padding: 2px 8px;
                   border-radius: 99px; flex-shrink: 0; }
-    .result-detail-btn { font-size: 12px; color: #185FA5; background: none; border: none; cursor: pointer;
+    .result-detail-btn { font-size: 12px; color: var(--color-primary); background: none; border: none; cursor: pointer;
                           padding: 0; margin-top: 8px; text-decoration: underline; font-family: inherit; }
     .result-select-cb { margin-top: 8px; flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
 
     /* ── Sélection de documents / collections personnelles ────── */
     .selection-toolbar { display: none; align-items: center; gap: 14px; margin-bottom: 12px;
-                          padding: 10px 14px; background: #E6F1FB; border-radius: 10px;
-                          font-size: 13px; color: #185FA5; }
-    .selection-toolbar button { font-size: 13px; color: #185FA5; background: none; border: none;
+                          padding: 10px 14px; background: var(--color-accent-bg); border-radius: 10px;
+                          font-size: 13px; color: var(--color-primary); }
+    .selection-toolbar button { font-size: 13px; color: var(--color-primary); background: none; border: none;
                                  cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
     .collection-picker-btn { display: flex; justify-content: space-between; align-items: center; width: 100%;
-                        text-align: left; padding: 8px 10px; border: 1px solid #e5e5e0; border-radius: 8px;
-                        background: #fff; cursor: pointer; font-size: 13px; color: #333; font-family: inherit; }
-    .collection-picker-btn:hover { background: #f5f5f3; }
+                        text-align: left; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px;
+                        background: var(--color-bg-surface); cursor: pointer; font-size: 13px; color: var(--color-text-secondary); font-family: inherit; }
+    .collection-picker-btn:hover { background: var(--color-bg-page); }
     .collection-doc-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
-                    border-bottom: 1px solid #f0f0ec; }
+                    border-bottom: 1px solid var(--color-bg-hover); }
     .collection-doc-row:last-child { border-bottom: none; }
     .collection-doc-row a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-                       white-space: nowrap; color: #185FA5; font-size: 13px; text-decoration: none; }
+                       white-space: nowrap; color: var(--color-primary); font-size: 13px; text-decoration: none; }
     .collection-doc-row a:hover { text-decoration: underline; }
-    .archive-badge { font-size: 11px; color: #B34000; background: #FFF3E0; padding: 2px 8px;
+    .archive-badge { font-size: 11px; color: var(--color-archive-text); background: var(--color-archive-bg); padding: 2px 8px;
                      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
-    .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: #aaa; margin-top: 4px;
+    .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-text-faint-2); margin-top: 4px;
                    display: flex; align-items: center; gap: 4px; }
     .result-path .path-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                                flex: 1; min-width: 0; }
-    .copy-icon-btn { flex-shrink: 0; border: none; background: none; color: #aaa; cursor: pointer;
+    .copy-icon-btn { flex-shrink: 0; border: none; background: none; color: var(--color-text-faint-2); cursor: pointer;
                      width: 22px; height: 22px; padding: 0; border-radius: 5px; display: inline-flex;
                      align-items: center; justify-content: center; }
     .copy-icon-btn svg { width: 14px; height: 14px; }
-    .copy-icon-btn:hover { background: #f0f0ec; color: #185FA5; }
-    .copy-icon-btn.copied { color: #1f9254; }
+    .copy-icon-btn:hover { background: var(--color-bg-hover); color: var(--color-primary); }
+    .copy-icon-btn.copied { color: var(--color-success); }
 
     .pagination { display: flex; gap: 6px; justify-content: center; margin-top: 20px; }
     .page-btn { min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
-                border-radius: 8px; border: 1px solid #e5e5e0; background: #fff; cursor: pointer;
-                font-size: 13px; color: #333; }
-    .page-btn:hover { background: #f0f0ec; }
-    .page-btn.active { background: #185FA5; color: #fff; border-color: #185FA5; }
-    .empty { text-align: center; color: #888; padding: 60px 0; }
+                border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-bg-surface); cursor: pointer;
+                font-size: 13px; color: var(--color-text-secondary); }
+    .page-btn:hover { background: var(--color-bg-hover); }
+    .page-btn.active { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
+    .empty { text-align: center; color: var(--color-text-faint); padding: 60px 0; }
     .empty i { font-size: 32px; display: block; margin-bottom: 10px; }
 
-    .footer { border-top: 1px solid #e5e5e0; margin-top: 32px; padding: 20px 24px 28px;
+    .footer { border-top: 1px solid var(--color-border); margin-top: 32px; padding: 20px 24px 28px;
               display: flex; align-items: center; justify-content: space-between;
-              flex-wrap: wrap; gap: 10px; font-size: 12px; color: #888; flex-shrink: 0; }
+              flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--color-text-faint); flex-shrink: 0; }
     .footer-links { display: flex; gap: 18px; }
-    .footer-links a { color: #888; text-decoration: none; }
-    .footer-links a:hover { color: #185FA5; }
+    .footer-links a { color: var(--color-text-faint); text-decoration: none; }
+    .footer-links a:hover { color: var(--color-primary); }
 
     .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
-                       border-radius: 50%; background: #185FA5; color: #fff; border: none;
+                       border-radius: 50%; background: var(--color-primary); color: var(--color-bg-surface); border: none;
                        font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
                        display: none; align-items: center; justify-content: center; z-index: 20; }
     .scroll-top-btn.show { display: flex; }
-    .scroll-top-btn:hover { background: #0C447C; }
+    .scroll-top-btn:hover { background: var(--color-primary-hover); }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,24,0.45); display: none;
                      align-items: center; justify-content: center; z-index: 100; padding: 20px; }
     .modal-overlay.open { display: flex; }
-    .modal-card { background: #fff; border-radius: 12px; max-width: 560px; width: 100%;
+    .modal-card { background: var(--color-bg-surface); border-radius: 12px; max-width: 560px; width: 100%;
                   max-height: 85vh; overflow-y: auto; padding: 24px; position: relative; }
     .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none;
-                   cursor: pointer; color: #888; font-size: 20px; line-height: 1; padding: 4px; }
-    .modal-close:hover { color: #333; }
+                   cursor: pointer; color: var(--color-text-faint); font-size: 20px; line-height: 1; padding: 4px; }
+    .modal-close:hover { color: var(--color-text-secondary); }
     .modal-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13px;
-                 border-bottom: 1px solid #f0f0ec; }
+                 border-bottom: 1px solid var(--color-bg-hover); }
     .modal-row:last-child { border-bottom: none; }
-    .modal-row .k { color: #888; display: flex; align-items: center; gap: 6px; }
-    .modal-row .v { color: #1a1a18; text-align: right; }
-    .modal-banner { background: #FFF3E0; color: #B34000; border-radius: 8px; padding: 10px 14px;
+    .modal-row .k { color: var(--color-text-faint); display: flex; align-items: center; gap: 6px; }
+    .modal-row .v { color: var(--color-text); text-align: right; }
+    .modal-banner { background: var(--color-archive-bg); color: var(--color-archive-text); border-radius: 8px; padding: 10px 14px;
                     font-size: 12px; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
     .modal-acl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: #f5f5f3;
-               color: #555; display: flex; align-items: center; gap: 5px; }
+    .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--color-bg-page);
+               color: var(--color-text-mid); display: flex; align-items: center; gap: 5px; }
     .keyword-remove-btn { flex-shrink: 0; width: 14px; height: 14px; display: inline-flex;
                            align-items: center; justify-content: center; border-radius: 3px; }
     .keyword-remove-btn svg { width: 10px; height: 10px; }
-    .keyword-remove-btn:hover { background: #e5e5e0; color: #A32D2D; }
+    .keyword-remove-btn:hover { background: var(--color-border); color: var(--color-danger-alt); }
     .modal-preview-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
-                         background: #185FA5; color: #fff; border-radius: 8px; text-decoration: none;
+                         background: var(--color-primary); color: var(--color-bg-surface); border-radius: 8px; text-decoration: none;
                          font-size: 13px; margin-top: 4px; }
-    .modal-preview-btn:hover { background: #0C447C; }
+    .modal-preview-btn:hover { background: var(--color-primary-hover); }
 
     /* ── Pouce haut/bas (feedback par recherche) ─────────────── */
     .feedback-bar { display: flex; align-items: center; gap: 10px; justify-content: center;
-                    margin-top: 18px; padding: 14px; background: #fff; border: 1px solid #e5e5e0;
-                    border-radius: 10px; font-size: 13px; color: #666; }
-    .feedback-btn { border: 1px solid #d5d5ce; background: #fff; border-radius: 8px; cursor: pointer;
+                    margin-top: 18px; padding: 14px; background: var(--color-bg-surface); border: 1px solid var(--color-border);
+                    border-radius: 10px; font-size: 13px; color: var(--color-text-muted); }
+    .feedback-btn { border: 1px solid var(--color-border-input); background: var(--color-bg-surface); border-radius: 8px; cursor: pointer;
                     font-size: 16px; padding: 5px 12px; line-height: 1; }
-    .feedback-btn:hover:not(:disabled) { background: #f5f5f3; }
+    .feedback-btn:hover:not(:disabled) { background: var(--color-bg-page); }
     .feedback-btn:disabled { cursor: default; opacity: 0.5; }
 
     /* ── NPS (popup occasionnelle) ────────────────────────────── */
     .nps-scale { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; justify-content: center; }
-    .nps-score-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #d5d5ce;
-                     background: #fff; cursor: pointer; font-size: 13px; }
-    .nps-score-btn:hover { background: #f0f0ec; }
-    .nps-score-btn.chosen { background: #185FA5; color: #fff; border-color: #185FA5; }
-    .nps-labels { display: flex; justify-content: space-between; font-size: 11px; color: #888; }
-    .nps-thanks { text-align: center; color: #1f9254; padding: 20px 0; font-size: 14px; }
+    .nps-score-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--color-border-input);
+                     background: var(--color-bg-surface); cursor: pointer; font-size: 13px; }
+    .nps-score-btn:hover { background: var(--color-bg-hover); }
+    .nps-score-btn.chosen { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
+    .nps-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-text-faint); }
+    .nps-thanks { text-align: center; color: var(--color-success); padding: 20px 0; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -285,9 +286,9 @@
         <div class="saved-panel" id="alerts-panel"></div>
       </div>
       <button id="suggestion-link" class="saved-toggle" style="display:none;" onclick="openSuggestionModal()">💡 Suggérer une idée</button>
-      <a href="/help" id="help-link" target="_blank" style="color:#185FA5;">❓ Aide</a>
-      <a href="/chat" id="chat-link" style="color:#185FA5; display:none;">Assistant IA →</a>
-      <a href="/admin.html" id="admin-link" style="color:#888; display:none;">Administration</a>
+      <a href="/help" id="help-link" target="_blank" style="color:var(--color-primary);">❓ Aide</a>
+      <a href="/chat" id="chat-link" style="color:var(--color-primary); display:none;">Assistant IA →</a>
+      <a href="/admin.html" id="admin-link" style="color:var(--color-text-faint); display:none;">Administration</a>
     </div>
   </header>
 
@@ -1026,7 +1027,7 @@
       card.innerHTML = `
         <button class="modal-close" onclick="closeNps()" aria-label="Fermer">✕</button>
         <p style="font-weight:600;font-size:15px;margin-bottom:6px;">Une question rapide</p>
-        <p style="font-size:13px;color:#666;">Sur une échelle de 0 à 10, recommanderiez-vous DocSearch à un collègue ?</p>
+        <p style="font-size:13px;color:var(--color-text-muted);">Sur une échelle de 0 à 10, recommanderiez-vous DocSearch à un collègue ?</p>
         <div class="nps-scale">${scores.map(s => `<button class="nps-score-btn" data-score="${s}">${s}</button>`).join('')}</div>
         <div class="nps-labels"><span>Pas du tout probable</span><span>Très probable</span></div>`;
       document.getElementById('nps-overlay').classList.add('open');
@@ -1058,15 +1059,15 @@
       card.innerHTML = `
         <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
         <p style="font-weight:600;font-size:15px;margin-bottom:6px;">💡 Suggérer une idée</p>
-        <p style="font-size:13px;color:#666;margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
-        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;margin-bottom:10px;">
+        <p style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
+        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid var(--color-border-input);border-radius:8px;font-size:13px;margin-bottom:10px;">
           <option value="idea">Idée / amélioration</option>
           <option value="bug">Bug</option>
           <option value="other">Autre</option>
         </select>
         <textarea id="suggestion-text" rows="5" placeholder="Votre suggestion…"
-                  style="width:100%;padding:10px;border:1px solid #d5d5ce;border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#333;cursor:pointer;">
+                  style="width:100%;padding:10px;border:1px solid var(--color-border-input);border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;">
           <input type="checkbox" id="suggestion-not-anonymous" />
           Ne pas rester anonyme (associer mon identité à cette suggestion)
         </label>
@@ -1178,13 +1179,13 @@
             <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;">
               <span class="result-title" style="margin-bottom:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title || r.filename}</span>
               ${sourceNote}
-              ${fields.has('author') && r.author ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-user" aria-hidden="true"></i> ${r.author}</span>` : ''}
-              ${fields.has('date_modified') ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-calendar" aria-hidden="true"></i> ${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
-              ${fields.has('folder') && r.folder ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-folder" aria-hidden="true"></i> ${r.folder}</span>` : ''}
-              ${fields.has('size') ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-file" aria-hidden="true"></i> ${fmtSize(r.size)}</span>` : ''}
-              ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-lock" aria-hidden="true"></i> ${r.acl.groups[0]}</span>` : ''}
-              ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-phone" aria-hidden="true"></i> ${r.telephone}</span>` : ''}
-              ${fields.has('bureau') && r.bureau ? `<span style="font-size:12px;color:#888;white-space:nowrap;flex-shrink:0;"><i class="ti ti-building" aria-hidden="true"></i> ${r.bureau}</span>` : ''}
+              ${fields.has('author') && r.author ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-user" aria-hidden="true"></i> ${r.author}</span>` : ''}
+              ${fields.has('date_modified') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-calendar" aria-hidden="true"></i> ${r.date_modified ? r.date_modified.slice(0,10) : '—'}</span>` : ''}
+              ${fields.has('folder') && r.folder ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-folder" aria-hidden="true"></i> ${r.folder}</span>` : ''}
+              ${fields.has('size') ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-file" aria-hidden="true"></i> ${fmtSize(r.size)}</span>` : ''}
+              ${fields.has('acl_group') && r.acl && r.acl.groups && r.acl.groups.length ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-lock" aria-hidden="true"></i> ${r.acl.groups[0]}</span>` : ''}
+              ${fields.has('telephone') && r.telephone ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-phone" aria-hidden="true"></i> ${r.telephone}</span>` : ''}
+              ${fields.has('bureau') && r.bureau ? `<span style="font-size:12px;color:var(--color-text-faint);white-space:nowrap;flex-shrink:0;"><i class="ti ti-building" aria-hidden="true"></i> ${r.bureau}</span>` : ''}
             </div>
             <span class="score-pill">${scorePct}%</span>
           </div>
@@ -1866,7 +1867,7 @@
       document.getElementById('collections-panel').classList.remove('open');
       const overlay = document.getElementById('collections-overlay');
       const card = document.getElementById('collections-card');
-      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      card.innerHTML = '<p style="text-align:center;color:var(--color-text-faint);padding:20px 0;">Chargement…</p>';
       overlay.classList.add('open');
 
       const collection = myCollectionsCache.find(l => l.id === collectionId);
@@ -1875,7 +1876,7 @@
       if (!collection.doc_ids.length) {
         card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
           <p style="font-weight:600;font-size:15px;margin-bottom:12px;">${escapeHtml(collection.name)}</p>
-          <p class="muted" style="font-size:13px;color:#888;">Collection vide.</p>`;
+          <p class="muted" style="font-size:13px;color:var(--color-text-faint);">Collection vide.</p>`;
         return;
       }
 
@@ -1884,7 +1885,7 @@
         const docId = collection.doc_ids[i];
         const inner = r.status === 'fulfilled'
           ? `<a href="#" onclick="closeCollectionsModal(); openDetail('${docId}'); return false;">${escapeHtml(r.value.title || r.value.filename)}</a>`
-          : `<span style="flex:1;font-size:13px;color:#c92a2a;">Document indisponible</span>`;
+          : `<span style="flex:1;font-size:13px;color:var(--color-danger);">Document indisponible</span>`;
         return `<div class="collection-doc-row">
           ${inner}
           <button class="copy-icon-btn" title="Retirer de la collection" aria-label="Retirer de la collection" onclick="removeFromCollection('${collectionId}', '${docId}')">${ICON_X}</button>
@@ -1909,7 +1910,7 @@
       if (!selectedDocs.size) return;
       const overlay = document.getElementById('collections-overlay');
       const card = document.getElementById('collections-card');
-      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Chargement…</p>';
+      card.innerHTML = '<p style="text-align:center;color:var(--color-text-faint);padding:20px 0;">Chargement…</p>';
       overlay.classList.add('open');
       try {
         myCollectionsCache = await api('/collections');
@@ -1917,7 +1918,7 @@
       } catch (e) {
         card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
 
-          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+          <p style="color:var(--color-danger-alt);padding:20px 0;">${e.message}</p>`;
       }
     }
 
@@ -1930,12 +1931,12 @@
         <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px;">
           ${myCollectionsCache.map(l => `
             <button class="collection-picker-btn" data-collection-id="${l.id}">
-              <span>${escapeHtml(l.name)}</span><span style="color:#888;">${l.doc_ids.length}</span>
-            </button>`).join('') || '<p class="muted" style="font-size:13px;color:#888;">Aucune collection pour l’instant.</p>'}
+              <span>${escapeHtml(l.name)}</span><span style="color:var(--color-text-faint);">${l.doc_ids.length}</span>
+            </button>`).join('') || '<p class="muted" style="font-size:13px;color:var(--color-text-faint);">Aucune collection pour l’instant.</p>'}
         </div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="new-collection-name" placeholder="Nouvelle collection…"
-                 style="flex:1;padding:8px 10px;border:1px solid #d5d5ce;border-radius:8px;font-size:13px;" />
+                 style="flex:1;padding:8px 10px;border:1px solid var(--color-border-input);border-radius:8px;font-size:13px;" />
           <button class="btn-primary" id="create-collection-btn">Créer</button>
         </div>`;
       card.querySelectorAll('[data-collection-id]').forEach(btn => {
@@ -1960,7 +1961,7 @@
 
     async function addSelectedDocsToCollection(collectionId) {
       const card = document.getElementById('collections-card');
-      card.innerHTML = '<p style="text-align:center;color:#888;padding:20px 0;">Ajout en cours…</p>';
+      card.innerHTML = '<p style="text-align:center;color:var(--color-text-faint);padding:20px 0;">Ajout en cours…</p>';
       try {
         for (const docId of selectedDocs) {
           await api(`/collections/${collectionId}/documents`, { method: 'POST', body: JSON.stringify({ doc_id: docId }) });
@@ -1971,7 +1972,7 @@
       } catch (e) {
         card.innerHTML = `<button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
 
-          <p style="color:#A32D2D;padding:20px 0;">${e.message}</p>`;
+          <p style="color:var(--color-danger-alt);padding:20px 0;">${e.message}</p>`;
       }
     }
 
@@ -1995,7 +1996,7 @@
       trackClick(id);
       const overlay = document.getElementById('modal-overlay');
       const card = document.getElementById('modal-card');
-      card.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">Chargement…</p>';
+      card.innerHTML = '<p style="text-align:center;color:var(--color-text-faint);padding:40px 0;">Chargement…</p>';
       overlay.classList.add('open');
 
       try {
@@ -2003,7 +2004,7 @@
         renderDetail(doc, id);
       } catch (e) {
         card.innerHTML = `<button class="modal-close" onclick="closeModal()" aria-label="Fermer">✕</button>
-          <p style="color:#A32D2D;padding:20px 0;">Impossible de charger ce document : ${e.message}</p>`;
+          <p style="color:var(--color-danger-alt);padding:20px 0;">Impossible de charger ce document : ${e.message}</p>`;
       }
     }
 
@@ -2057,7 +2058,7 @@
       const keywordsAddHtml = canEditKeywords ? `
         <div style="display:flex;gap:6px;width:100%;">
           <input type="text" id="new-keyword-input" placeholder="Ajouter un ou plusieurs mots-clés (séparés par ;)…"
-                 style="flex:1;padding:4px 8px;border:1px solid #d5d5ce;border-radius:6px;font-size:12px;"
+                 style="flex:1;padding:4px 8px;border:1px solid var(--color-border-input);border-radius:6px;font-size:12px;"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();addDocKeyword('${id}');}" />
           <button class="secondary" onclick="addDocKeyword('${id}')" style="padding:4px 10px;font-size:12px;">Ajouter</button>
         </div>` : '';
@@ -2069,7 +2070,7 @@
           <div class="ext-icon" style="background:${ec.bg};color:${ec.color};width:44px;height:44px;font-size:11px;">${extLabel(doc.extension)}</div>
           <div style="flex:1;min-width:0;">
             <p style="font-weight:600;font-size:16px;">${doc.title || doc.filename}</p>
-            ${isArchiveMember ? `<p style="font-size:12px;color:#888;margin-top:2px;">Extrait de l'archive ${archivePart.split('/').pop()}</p>` : ''}
+            ${isArchiveMember ? `<p style="font-size:12px;color:var(--color-text-faint);margin-top:2px;">Extrait de l'archive ${archivePart.split('/').pop()}</p>` : ''}
           </div>
         </div>
         ${previewBanner}
@@ -2100,8 +2101,8 @@
           <div class="modal-row"><span class="k"><i class="ti ti-file" aria-hidden="true"></i>Taille</span><span class="v">${fmtSize(doc.size)}</span></div>
           ${isArchiveMember ? `<div class="modal-row"><span class="k"><i class="ti ti-file-zip" aria-hidden="true"></i>Chemin dans l'archive</span><span class="v" style="font-family:monospace;font-size:12px;">${memberPart}</span></div>` : ''}
         </div>
-        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0ec;">
-          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#888;margin-bottom:8px;">Droits d'accès</p>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--color-bg-hover);">
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-text-faint);margin-bottom:8px;">Droits d'accès</p>
           <div class="modal-acl">
             ${doc.acl && doc.acl.owner ? `<span class="acl-tag"><i class="ti ti-user" aria-hidden="true"></i>Propriétaire : ${doc.acl.owner}</span>` : ''}
             ${aclGroupsHtml}

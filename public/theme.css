@@ -1,0 +1,61 @@
+/* ── Thème DocSearch ──────────────────────────────────────────
+   Variables CSS partagées entre index.html et admin.html — un seul
+   endroit pour faire évoluer les couleurs (rebranding, thème sombre...)
+   sans reproduire le changement dans chaque fichier.
+
+   Ne couvre PAS la palette de catégorisation par type de fichier/source
+   (EXT_COLORS / SOURCE_PALETTE dans index.html) : ces teintes distinguent
+   des catégories de contenu entre elles, elles ne représentent pas
+   l'identité visuelle de l'appli et n'ont pas vocation à changer avec
+   le thème.
+*/
+
+:root {
+  /* Marque */
+  --color-primary:        #185FA5;
+  --color-primary-hover:  #0C447C;
+  --color-primary-rgb:    24, 95, 165;
+  --color-accent-bg:      #E6F1FB;
+
+  /* Fonds */
+  --color-bg-page:    #f5f5f3;
+  --color-bg-surface: #fff;
+  --color-bg-hover:   #f0f0ec;
+
+  /* Bordures */
+  --color-border:       #e5e5e0;
+  --color-border-input: #d5d5ce;
+  --color-border-light: #eee;
+  --color-border-hover: #85B7EB;
+
+  /* Texte (nuances de gris déjà en usage — non consolidées ici pour ne
+     rien changer visuellement ; une passe de nettoyage ultérieure
+     pourra réduire ce nombre de nuances). */
+  --color-text:           #1a1a18;
+  --color-text-secondary: #333;
+  --color-text-mid:       #555;
+  --color-text-muted:     #666;
+  --color-text-dim:       #444;
+  --color-text-faint:     #888;
+  --color-text-faint-2:   #aaa;
+
+  /* États / statuts */
+  --color-success:     #1f9254;
+  --color-danger:       #c92a2a;
+  --color-danger-dark:  #a12a2a;
+  --color-danger-alt:   #A32D2D;
+  --color-warning:      #e8990c;
+
+  /* Étiquettes (mots-clés) */
+  --color-tag-bg:   #ececfd;
+  --color-tag-text: #3C3489;
+
+  /* Bandeau d'erreur */
+  --color-error-bg:     #fff0f0;
+  --color-error-border: #f5c2c2;
+
+  /* Accents ponctuels */
+  --color-archive-bg:   #FFF3E0;
+  --color-archive-text: #B34000;
+  --color-highlight-bg: #FFF200;
+}

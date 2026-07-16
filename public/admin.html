@@ -4,38 +4,39 @@
   <meta charset="UTF-8" />
   <title>DocSearch — Administration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/theme.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
-    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
+    body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text); }
+    .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 14px 24px;
               display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px;
               position: sticky; top: 0; z-index: 10; }
-    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
+    .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
     .header-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; }
-    .header a { font-size: 14px; color: #185FA5; text-decoration: none; }
-    .header-user { background: #E6F1FB; color: #185FA5; font-size: 12px; font-weight: 500;
+    .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; }
+    .header-user { background: var(--color-accent-bg); color: var(--color-primary); font-size: 12px; font-weight: 500;
                    padding: 4px 10px; border-radius: 12px; }
     .header-user:empty { display: none; }
 
     .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
     .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-    .link-button { background: none; border: none; color: #185FA5; font-size: 14px;
+    .link-button { background: none; border: none; color: var(--color-primary); font-size: 14px;
                    cursor: pointer; padding: 0; font-family: inherit; }
     #app { display: flex; flex-direction: column; gap: 24px; }
 
     .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
-                       border-radius: 50%; background: #185FA5; color: #fff; border: none;
+                       border-radius: 50%; background: var(--color-primary); color: var(--color-bg-surface); border: none;
                        font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
                        display: none; align-items: center; justify-content: center; z-index: 20; }
     .scroll-top-btn.show { display: flex; }
-    .scroll-top-btn:hover { background: #0C447C; }
+    .scroll-top-btn:hover { background: var(--color-primary-hover); }
 
-    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 20px; }
-    .panel h2 small { font-weight: 400; color: #888; font-size: 12px; margin-left: 8px; }
+    .panel { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 20px; }
+    .panel h2 small { font-weight: 400; color: var(--color-text-faint); font-size: 12px; margin-left: 8px; }
 
     .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-                     font-size: 16px; color: #1a1a18; margin: 0; cursor: pointer; user-select: none; }
-    .accordion-caret { font-size: 11px; color: #888; flex-shrink: 0; transition: transform 0.15s; }
+                     font-size: 16px; color: var(--color-text); margin: 0; cursor: pointer; user-select: none; }
+    .accordion-caret { font-size: 11px; color: var(--color-text-faint); flex-shrink: 0; transition: transform 0.15s; }
     .panel.collapsed .accordion-caret { transform: rotate(-90deg); }
     .panel-body { margin-top: 14px; }
     .panel.collapsed .panel-body { display: none; }
@@ -43,60 +44,60 @@
     .panel-group { display: flex; flex-direction: column; gap: 24px; }
     .section-group-title { display: flex; align-items: center; justify-content: space-between; gap: 12px;
                             font-size: 12px; font-weight: 700; text-transform: uppercase;
-                            letter-spacing: 0.08em; color: #185FA5; padding-bottom: 6px;
-                            border-bottom: 2px solid #E6F1FB; cursor: pointer; user-select: none; }
-    .group-caret { font-size: 11px; color: #185FA5; flex-shrink: 0; transition: transform 0.15s; }
+                            letter-spacing: 0.08em; color: var(--color-primary); padding-bottom: 6px;
+                            border-bottom: 2px solid var(--color-accent-bg); cursor: pointer; user-select: none; }
+    .group-caret { font-size: 11px; color: var(--color-primary); flex-shrink: 0; transition: transform 0.15s; }
     .panel-group.collapsed .group-caret { transform: rotate(-90deg); }
     .panel-group-body { display: flex; flex-direction: column; gap: 24px; }
     .panel-group.collapsed .panel-group-body { display: none; }
 
     .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
                    gap: 12px; }
-    .status-card { border: 1px solid #e5e5e0; border-radius: 8px; padding: 12px; }
-    .status-card .name { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .status-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; }
+    .status-card .name { font-size: 12px; color: var(--color-text-faint); margin-bottom: 4px; }
     .status-card .value { font-size: 15px; font-weight: 600; }
     .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
-    .dot.up { background: #1f9254; }
-    .dot.down { background: #c92a2a; }
-    .dot.warn { background: #e8990c; }
+    .dot.up { background: var(--color-success); }
+    .dot.down { background: var(--color-danger); }
+    .dot.warn { background: var(--color-warning); }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
-    th { color: #888; font-weight: 500; font-size: 12px; }
-    input[type=text], input[type=number] { padding: 5px 8px; border: 1px solid #d5d5ce;
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border-light); }
+    th { color: var(--color-text-faint); font-weight: 500; font-size: 12px; }
+    input[type=text], input[type=number] { padding: 5px 8px; border: 1px solid var(--color-border-input);
                                             border-radius: 6px; font-size: 13px; width: 100%; }
     input[type=checkbox] { width: 16px; height: 16px; }
 
     .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .row input[type=text] { flex: 1; }
 
-    button { padding: 6px 14px; background: #185FA5; color: #fff; border: none;
+    button { padding: 6px 14px; background: var(--color-primary); color: var(--color-bg-surface); border: none;
              border-radius: 6px; cursor: pointer; font-size: 13px; }
-    button.secondary { background: #eee; color: #333; }
-    button.danger { background: #c92a2a; }
+    button.secondary { background: var(--color-border-light); color: var(--color-text-secondary); }
+    button.danger { background: var(--color-danger); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .tag { background: #ececfd; color: #3C3489; padding: 4px 10px; border-radius: 12px;
+    .tag { background: var(--color-tag-bg); color: var(--color-tag-text); padding: 4px 10px; border-radius: 12px;
            font-size: 12px; display: flex; align-items: center; gap: 6px; }
-    .tag button { background: none; color: #3C3489; padding: 0; font-size: 14px; line-height: 1; }
+    .tag button { background: none; color: var(--color-tag-text); padding: 0; font-size: 14px; line-height: 1; }
 
     .source-tree, .source-tree ul { list-style: none; }
-    .source-tree { margin-top: 6px; max-height: 420px; overflow-y: auto; border: 1px solid #e5e5e0;
+    .source-tree { margin-top: 6px; max-height: 420px; overflow-y: auto; border: 1px solid var(--color-border);
                    border-radius: 8px; padding: 8px 10px; font-size: 13px; }
     .source-tree ul.tree-children { margin-left: 18px; }
     .tree-entry { padding: 3px 0; }
-    .tree-toggle { display: inline-block; width: 14px; color: #185FA5; font-size: 11px; }
+    .tree-toggle { display: inline-block; width: 14px; color: var(--color-primary); font-size: 11px; }
     .tree-entry.tree-dir { cursor: pointer; }
-    .tree-entry.tree-file .tree-name { color: #444; }
-    .tree-entry.tree-excluded > .tree-name { color: #c92a2a; text-decoration: line-through; }
-    .tree-entry.tree-included > .tree-name { color: #1f9254; }
-    .tree-included-tag { color: #1f9254; font-size: 12px; }
+    .tree-entry.tree-file .tree-name { color: var(--color-text-dim); }
+    .tree-entry.tree-excluded > .tree-name { color: var(--color-danger); text-decoration: line-through; }
+    .tree-entry.tree-included > .tree-name { color: var(--color-success); }
+    .tree-included-tag { color: var(--color-success); font-size: 12px; }
 
-    .muted { color: #888; font-size: 12px; }
-    .error-banner { background: #fff0f0; border: 1px solid #f5c2c2; color: #a12a2a;
+    .muted { color: var(--color-text-faint); font-size: 12px; }
+    .error-banner { background: var(--color-error-bg); border: 1px solid var(--color-error-border); color: var(--color-danger-dark);
                     padding: 14px 18px; border-radius: 8px; }
-    .save-hint { font-size: 11px; color: #1f9254; margin-left: 8px; opacity: 0; transition: opacity .3s; }
+    .save-hint { font-size: 11px; color: var(--color-success); margin-left: 8px; opacity: 0; transition: opacity .3s; }
     .save-hint.show { opacity: 1; }
   </style>
 </head>
@@ -755,7 +756,7 @@
       const data = await api('/admin/display-styles');
       const fields = data.allowed_fields;
       const blocks = Object.entries(data.styles).map(([name, def]) => `
-        <div class="row" data-style="${name}" style="border-bottom:1px solid #f0f0ec;padding-bottom:14px;margin-bottom:14px;">
+        <div class="row" data-style="${name}" style="border-bottom:1px solid var(--color-bg-hover);padding-bottom:14px;margin-bottom:14px;">
           <p style="font-weight:600;margin-bottom:8px;">${DISPLAY_STYLE_LABELS[name] || name}</p>
           <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
             ${fields.map(f => `
@@ -1202,7 +1203,7 @@
       const isEdit = !!source;
       const fields = (source?.fields?.length ? source.fields : [{ column: 'id', es_field: 'id', es_type: 'keyword' }]);
       return `
-        <div class="panel" style="border:1px dashed #185FA5;">
+        <div class="panel" style="border:1px dashed var(--color-primary);">
           <h3 style="margin-bottom:14px;">${isEdit ? `Modifier « ${escapeHtml(name)} »` : 'Nouvelle source SQL'}</h3>
           <div class="row">
             <input type="text" id="sql-form-name" placeholder="nom (ex: clients_pg)" value="${escapeHtml(name || '')}" ${isEdit ? 'disabled' : ''} />
@@ -1223,7 +1224,7 @@
             <input type="text" id="sql-form-description" placeholder="description (optionnel)" value="${escapeHtml(source?.description || '')}" />
           </div>
           <div class="row">
-            <textarea id="sql-form-query" rows="3" style="flex:1;font:13px/1.4 monospace;padding:6px 8px;border:1px solid #d5d5ce;border-radius:6px;"
+            <textarea id="sql-form-query" rows="3" style="flex:1;font:13px/1.4 monospace;padding:6px 8px;border:1px solid var(--color-border-input);border-radius:6px;"
                       placeholder="SELECT id, nom, email FROM clients WHERE actif = true">${escapeHtml(source?.query || '')}</textarea>
           </div>
 
@@ -1394,7 +1395,7 @@
           <td class="muted">${s.description || ''}</td>
           <td>${s.paused
             ? '<span class="muted">⏸ suspendu</span>'
-            : '<span style="color:#1f9254;">▶ actif</span>'}</td>
+            : '<span style="color:var(--color-success);">▶ actif</span>'}</td>
           <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
           <td><button class="secondary web-src-edit-label">Modifier le libellé</button></td>
           <td><button class="secondary web-src-edit-description">Modifier la description</button></td>
@@ -1519,7 +1520,7 @@
             <button id="add-include" class="secondary">Inclure (liste blanche)</button>
           </div>
 
-          <hr style="margin:16px 0;border:none;border-top:1px solid #eee;" />
+          <hr style="margin:16px 0;border:none;border-top:1px solid var(--color-border-light);" />
 
           <div class="muted">Purger l'index existant selon un motif</div>
           <div class="row" style="margin-top:8px;">
