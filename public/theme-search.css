@@ -44,6 +44,11 @@
   --color-accent-bg:      #E6F1FB;
   --font-family:          system-ui, sans-serif;
 
+  /* Anneau de focus clavier (:focus-visible en bas de fichier) — même
+     couleur que la marque par défaut ; le thème dsfr le redéfinit sur
+     sa couleur officielle plus bas. */
+  --color-focus-ring: var(--color-primary);
+
   /* Fonds */
   --color-bg-page:    #f5f5f3;
   --color-bg-surface: #fff;
@@ -325,6 +330,11 @@
   --color-accent-bg:      #f5f5fe;
   --font-family:          'Marianne', Arial, sans-serif;
 
+  /* Couleur de focus officielle DSFR (@gouvfr/dsfr 1.14.4, règle
+     générique ":focus" du core) — déjà reprise en dur pour #q plus haut
+     dans index.html ; centralisée ici pour n'avoir qu'une source. */
+  --color-focus-ring: #0a76f6;
+
   --color-bg-page:    #f6f6f6;
   --color-bg-surface: #fff;
   --color-bg-hover:   #eeeeee;
@@ -360,13 +370,27 @@
 
   /* Angles carrés — la convention de forme du DSFR (boutons, cartes,
      champs...). Seules les puces pleinement arrondies (--radius-pill,
-     non redéfini ici) y échappent, comme dans le DSFR officiel où les
-     badges/tags restent en pilule (9999px) pendant que tout le reste
-     est à 0. */
+     non redéfini ici) y échappent, comme les fr-tag du DSFR officiel
+     (border-radius 1rem sur 2rem de haut = pilule). Les fr-badge, eux,
+     ne sont PAS des pilules côté DSFR (border-radius 4px seulement) —
+     .archive-badge le corrige localement (voir plus haut dans
+     index.html) plutôt que de toucher ce jeton partagé. */
   --radius-3:  0;
   --radius-5:  0;
   --radius-6:  0;
   --radius-8:  0;
   --radius-10: 0;
   --radius-12: 0;
+}
+
+/* Seule règle de composant de ce fichier (sinon uniquement des blocs de
+   propriétés + @font-face, voir en tête) : l'anneau de focus clavier
+   doit être identique et non dupliqué entre index.html et help.html,
+   donc porté ici plutôt que dans le <style> de l'une des deux pages.
+   Commun à tous les thèmes (chacun garde sa propre couleur via
+   --color-focus-ring) — voir #q:focus qui réutilise désormais ce même
+   jeton au lieu d'une valeur dsfr codée en dur séparément. */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }

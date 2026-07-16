@@ -18,6 +18,15 @@
     body { font-family: var(--font-family, system-ui, sans-serif); background: var(--color-bg-page); color: var(--color-text);
            min-height: 100vh; display: flex; flex-direction: column; }
 
+    /* Lien d'évitement — hors-écran (translateY) plutôt que "top:-999px",
+       même technique que .fr-skiplinks du DSFR : reste dans le flux pour
+       que le focus le révèle sans saut de mise en page. Commun à tous
+       les thèmes (gain d'accessibilité, pas une variante de style). */
+    .skip-link { position: absolute; top: 0; left: 0; z-index: 100; padding: 10px 16px;
+                 background: var(--color-bg-surface); color: var(--color-primary); text-decoration: underline;
+                 transform: translateY(-100%); transition: transform 0.15s; }
+    .skip-link:focus { transform: translateY(0); }
+
     /* Gabarit commun à toutes les icônes SVG inline (voir ICON_XXX plus
        loin) : même taille et alignement partout, qu'elles remplacent un
        ancien "ti ti-*" (police jamais chargée, invisible) ou un emoji
@@ -70,7 +79,10 @@
       border-radius: 4px 0 0 0;
     }
     [data-theme="dsfr"] #q::placeholder { font-style: italic; }
-    [data-theme="dsfr"] #q:focus { outline: 2px solid #0a76f6; outline-offset: 2px; }
+    /* Pas de règle :focus dédiée ici : #q est un champ de formulaire,
+       donc la règle globale :focus-visible (theme-search.css) se
+       déclenche déjà à la souris comme au clavier — une règle :focus
+       locale ferait doublon avec la même couleur/épaisseur. */
     [data-theme="dsfr"] .btn-primary { order: 2; margin-right: 8px; border-radius: 0 4px 0 0; }
     [data-theme="dsfr"] .sources-select-wrap { order: 3; margin-right: 8px; }
     [data-theme="dsfr"] .btn-reset { order: 4; }
@@ -96,6 +108,24 @@
     [data-theme="dsfr"] .saved-toggle:active {
       background: rgba(0, 0, 0, 0.1);
     }
+
+    /* Réplique "fr-btn--secondary" du DSFR sur .btn-reset : fond
+       transparent, bordure ET texte dans la couleur d'accent (pas de
+       gris neutre) — valeurs reprises du CSS compilé officiel
+       (.fr-btn--secondary — @gouvfr/dsfr 1.14.4, box-shadow inset 1px
+       remplacé ici par un border-color pour rester sur la propriété
+       déjà utilisée par .btn-reset). .btn-primary est déjà conforme
+       (carré, --color-primary) : le DSFR y ajoute un texte en graisse
+       "medium" (500), non repris ici faute de fichier Marianne Medium
+       embarqué (seuls Regular/Bold le sont, voir theme-search.css) —
+       500 sans cette graisse retomberait sur Regular, donc sans effet
+       visible. */
+    [data-theme="dsfr"] .btn-reset {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+      background: transparent;
+    }
+    [data-theme="dsfr"] .btn-reset:hover { background: var(--color-accent-bg); color: var(--color-primary); }
     .btn-reset:hover { background: var(--color-bg-page); color: var(--color-text-secondary); }
     .header-links { display: flex; gap: 16px; align-items: center; justify-content: flex-end; }
     .header-links a { font-size: 14px; color: var(--color-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
@@ -163,6 +193,18 @@
                                  display: flex; padding: 2px; }
     .active-filter-chip button svg { width: 12px; height: 12px; }
 
+    /* Réplique "fr-tag--dismiss" du DSFR : contrairement au fr-tag par
+       défaut (fond clair, texte coloré — déjà ce que .active-filter-chip
+       fait pour tous les thèmes), la variante retirable est en emphase
+       haute (fond plein, texte inversé), pour signaler que ces puces
+       sont interactives. Jetons déjà existants : --color-primary /
+       --color-accent-bg correspondent exactement aux valeurs officielles
+       (.fr-tag--dismiss, [aria-pressed=false] — @gouvfr/dsfr 1.14.4:
+       fond #000091 / texte #f5f5fe, identiques à nos --color-primary et
+       --color-accent-bg dsfr). Le bouton "×" hérite via currentColor. */
+    [data-theme="dsfr"] .active-filter-chip { background: var(--color-primary); color: var(--color-accent-bg); }
+    [data-theme="dsfr"] .active-filter-chip button { color: var(--color-accent-bg); }
+
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
     @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
 
@@ -182,6 +224,43 @@
     .facet-row.active { background: var(--color-accent-bg); color: var(--color-primary); font-weight: 500; }
     .facet-count { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-faint); padding: 1px 6px; border-radius: var(--radius-pill); }
     .facet-row.active .facet-count { background: transparent; color: var(--color-primary); }
+
+    /* Réplique visuelle "fr-checkbox" du DSFR sur .facet-row : ces
+       lignes ne sont PAS de vraies <input type="checkbox"> (juste des
+       <div> cliquables togglant .active, voir renderFacets), donc pas
+       de vraie sémantique clavier/lecteur d'écran ici — seulement
+       l'apparence (case + coche), scopée au thème dsfr. Angle de 4px
+       (pas 0, pas pilule) et coche en glyphe "✓" plutôt qu'un data-URI
+       SVG multi-dégradés : le vrai .fr-checkbox du DSFR construit son
+       carré à coins découpés avec 8 dégradés superposés, disproportionné
+       pour un pseudo-élément décoratif sur un contrôle non natif. Le
+       glyphe suit la convention déjà en usage dans ce fichier pour les
+       icônes décoratives légères (.facet-caret "▾", flèches "←"/"→" de
+       la pagination) plutôt qu'un nouvel asset. justify-content passe
+       à flex-start + flex:1 sur le libellé : avec .facet-count comme
+       3ᵉ enfant flex (après le "✓"), "space-between" écarterait les
+       trois au lieu de garder case+libellé collés à gauche. */
+    [data-theme="dsfr"] .facet-row { justify-content: flex-start; gap: 8px; }
+    [data-theme="dsfr"] .facet-row > span:first-child { flex: 1; }
+    [data-theme="dsfr"] .facet-row::before {
+      content: '';
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--color-border-input);
+      border-radius: 4px;
+      background: var(--color-bg-surface);
+    }
+    [data-theme="dsfr"] .facet-row.active::before {
+      content: '✓';
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-bg-surface);
+    }
     .facet-empty { font-size: 12px; color: var(--color-text-faint-2); padding: 4px 6px; }
     .date-range { display: flex; flex-direction: column; gap: 6px; }
     .date-range label { font-size: 11px; color: var(--color-text-faint-2); }
@@ -199,6 +278,27 @@
     .sort-select { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-mid); }
     .sort-select select { border: 1px solid var(--color-border-input); border-radius: var(--radius-6); padding: 4px 8px;
                           font-size: 13px; background: var(--color-bg-surface); cursor: pointer; }
+    /* Réplique "fr-select" du DSFR — même motif que #q plus haut (fond
+       gris, soulignement plutôt qu'un cadre complet, coins hauts seuls
+       arrondis), avec le chevron officiel (data-URI repris du CSS
+       compilé, .fr-select — @gouvfr/dsfr 1.14.4 ; fill #161616 = notre
+       --color-text dsfr, un data-URI ne pouvant pas suivre currentColor).
+       Proportions (padding, taille du chevron) adaptées à la taille
+       compacte déjà en usage ici plutôt que copiées telles quelles du
+       DSFR (pensé pour un <select> de formulaire pleine taille). */
+    [data-theme="dsfr"] .sort-select select {
+      appearance: none;
+      -webkit-appearance: none;
+      border: none;
+      border-radius: 4px 4px 0 0;
+      background-color: var(--color-bg-hover);
+      box-shadow: inset 0 -2px 0 0 var(--color-border-input);
+      padding: 4px 26px 4px 8px;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23161616' d='m12 13.1 5-4.9 1.4 1.4-6.4 6.3-6.4-6.4L7 8.1l5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      background-size: 14px 14px;
+    }
 
     .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-12); padding: 18px 20px;
                    margin-bottom: 12px; transition: border-color 0.15s, box-shadow 0.15s; }
@@ -250,6 +350,12 @@
     .collection-doc-row a:hover { text-decoration: underline; }
     .archive-badge { font-size: 11px; color: var(--color-archive-text); background: var(--color-archive-bg); padding: 2px 8px;
                      border-radius: var(--radius-pill); display: inline-flex; align-items: center; gap: 4px; }
+    /* fr-badge (statut, pas fr-tag) : contrairement aux puces/tags,
+       le DSFR ne l'arrondit pas en pilule (border-radius 4px seulement,
+       @gouvfr/dsfr 1.14.4 .fr-badge — vérifié dans le CSS compilé, ce
+       n'était pas évident a priori). --color-archive-text vaut déjà
+       #B34000, identique au jeton officiel .fr-badge--warning. */
+    [data-theme="dsfr"] .archive-badge { border-radius: 4px; text-transform: uppercase; font-weight: 700; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-text-faint-2); margin-top: 4px;
                    display: flex; align-items: center; gap: 4px; }
     .result-path .path-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -266,6 +372,17 @@
                 font-size: 13px; color: var(--color-text-secondary); }
     .page-btn:hover { background: var(--color-bg-hover); }
     .page-btn.active { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
+
+    /* Réplique "fr-pagination" du DSFR : contrairement à .page-btn de
+       base (cadre plein sur CHAQUE numéro, tous thèmes), le DSFR ne
+       cadre que la page active — les autres liens sont sans fond/bordure,
+       avec un survol gris translucide. Valeurs reprises du CSS compilé
+       officiel (.fr-pagination__link, [aria-current] — @gouvfr/dsfr
+       1.14.4 ; le remplissage de .page-btn.active était déjà conforme,
+       inchangé ici). */
+    [data-theme="dsfr"] .page-btn:not(.active) { border-color: transparent; background: none; }
+    [data-theme="dsfr"] .page-btn:not(.active):hover { background: rgba(0, 0, 0, 0.05); }
+    [data-theme="dsfr"] .page-btn.active:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
     .empty { text-align: center; color: var(--color-text-faint); padding: 60px 0; }
     .empty svg { width: 32px; height: 32px; display: block; margin: 0 auto 10px; }
 
@@ -298,6 +415,19 @@
     .modal-row .v { color: var(--color-text); text-align: right; }
     .modal-banner { background: var(--color-archive-bg); color: var(--color-archive-text); border-radius: var(--radius-8); padding: 10px 14px;
                     font-size: 12px; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
+    /* Écho simplifié de "fr-alert" du DSFR (pas une reproduction pixel-
+       exacte : le vrai fr-alert construit une gouttière à icône de 40px
+       avec 5 dégradés superposés — disproportionné pour cette notice
+       ponctuelle d'aperçu indisponible). On garde l'idée reconnaissable
+       du composant : liseré latéral de couleur + bord fin, plutôt que
+       la puce pleine actuelle. --color-archive-text vaut déjà #B34000,
+       identique au jeton officiel .fr-alert--warning. */
+    [data-theme="dsfr"] .modal-banner {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border);
+      border-left: 4px solid var(--color-archive-text);
+      border-radius: 0;
+    }
     .modal-acl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
     .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--color-bg-page);
                color: var(--color-text-mid); display: flex; align-items: center; gap: 5px; }
@@ -330,6 +460,7 @@
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Aller au contenu</a>
   <header class="header">
     <div class="header-top">
       <span class="logo">DocSearch</span>
@@ -347,7 +478,7 @@
       </div>
       <span id="current-user"></span>
     </div>
-    <div class="header-links">
+    <nav class="header-links" aria-label="Navigation secondaire">
       <div class="saved-wrap">
         <button class="saved-toggle" onclick="toggleSavedPanel()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.3 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.3 6.1-.7z"/></svg>Mes recherches</button>
         <div class="saved-panel" id="saved-panel"></div>
@@ -364,14 +495,14 @@
       <a href="/help" id="help-link" target="_blank"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6 1.3c0 1.5-2.1 1.7-2.1 3.2"/><path d="M12 17h.01"/></svg>Aide</a>
       <a href="/chat" id="chat-link" style="display:none;">Assistant IA →</a>
       <a href="/admin.html" id="admin-link" style="color:var(--color-text-faint); display:none;">Administration</a>
-    </div>
+    </nav>
   </header>
 
   <div class="container">
     <div class="active-filters" id="active-filters"></div>
 
     <div class="layout">
-      <aside class="sidebar">
+      <aside class="sidebar" aria-label="Filtres de recherche">
         <div class="facet-section" id="facet-section-sources">
           <div class="facet-title" onclick="toggleFacetAccordion('facet-section-sources')">Source<span class="facet-caret">▾</span></div>
           <div class="facet-body">
@@ -419,7 +550,7 @@
         </button>
       </aside>
 
-      <main>
+      <main id="main-content">
         <div class="stats-bar">
           <span id="result-count" style="display:none;"></span>
           <div id="results-actions" style="display:none; align-items:center; gap:6px;">
@@ -1390,9 +1521,9 @@
       const range = [];
       for (let i = Math.max(1, state.page - 2); i <= Math.min(pages, state.page + 2); i++) range.push(i);
       pag.innerHTML =
-        (state.page > 1 ? `<div class="page-btn page-prev" onclick="goPage(${state.page - 1})">←</div>` : '') +
-        range.map(i => `<div class="page-btn${i === state.page ? ' active' : ''}" onclick="goPage(${i})">${i}</div>`).join('') +
-        (state.page < pages ? `<div class="page-btn page-next" onclick="goPage(${state.page + 1})">→</div>` : '');
+        (state.page > 1 ? `<button type="button" class="page-btn page-prev" aria-label="Page précédente" onclick="goPage(${state.page - 1})">←</button>` : '') +
+        range.map(i => `<button type="button" class="page-btn${i === state.page ? ' active' : ''}" aria-label="Page ${i}"${i === state.page ? ' aria-current="page"' : ''} onclick="goPage(${i})">${i}</button>`).join('') +
+        (state.page < pages ? `<button type="button" class="page-btn page-next" aria-label="Page suivante" onclick="goPage(${state.page + 1})">→</button>` : '');
     }
 
     function goPage(n) { state.page = n; doSearch(); }
