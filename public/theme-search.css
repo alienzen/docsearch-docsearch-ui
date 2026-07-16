@@ -270,3 +270,51 @@
   --color-archive-text: #B34000;
   --color-highlight-bg: #FFF200;
 }
+
+/* Palette officielle du DSFR (Système de Design de l'État,
+   systeme-de-design.gouv.fr) — Bleu France (#000091) et échelle de gris
+   Marianne. Contrairement à "slate"/"red"/"green" (variations d'accent
+   qui gardent nos propres succès/erreur/avertissement), ce thème
+   reprend aussi les couleurs sémantiques officielles du DSFR : le but
+   est la fidélité à ce référentiel précis, pas juste une variante de
+   marque. Palette couleurs seule — pas la police Marianne (fichiers de
+   police non embarqués ici) ni les composants fr-*. */
+:root[data-theme="dsfr"] {
+  --color-primary:        #000091;
+  --color-primary-hover:  #1212ff;
+  --color-primary-rgb:    0, 0, 145;
+  --color-accent-bg:      #f5f5fe;
+
+  --color-bg-page:    #f6f6f6;
+  --color-bg-surface: #fff;
+  --color-bg-hover:   #eeeeee;
+
+  --color-border:       #dddddd;
+  --color-border-input: #dddddd;
+  --color-border-light: #e5e5e5;
+  --color-border-hover: #1212ff;
+
+  --color-text:           #161616;
+  --color-text-secondary: #3a3a3a;
+  --color-text-mid:       #4a4a4a;
+  --color-text-muted:     #666666;
+  --color-text-dim:       #575757;
+  --color-text-faint:     #929292;
+  --color-text-faint-2:   #b1b1b1;
+
+  --color-success:     #18753c;
+  --color-danger:       #ce0500;
+  --color-danger-dark:  #b30400;
+  --color-danger-alt:   #ce0500;
+  --color-warning:      #b34000;
+
+  --color-tag-bg:   #f5f5fe;
+  --color-tag-text: #000091;
+
+  --color-error-bg:     #fdf1f0;
+  --color-error-border: #e8a19c;
+
+  --color-archive-bg:   #FFF3E0;
+  --color-archive-text: #B34000;
+  --color-highlight-bg: #FFF200;
+}
