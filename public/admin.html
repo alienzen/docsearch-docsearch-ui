@@ -9,20 +9,24 @@
     // Applique tout de suite le dernier thème connu (cache localStorage,
     // par navigateur/poste) pour éviter un flash au thème par défaut le
     // temps que /ui-config réponde — loadTheme() remet à jour ce cache
-    // avec la valeur faisant autorité (Redis, via /ui-config). Même clé
-    // que index.html/help.html/admin-help.html : un seul thème pour
-    // toute l'installation, pas de préférence par page.
-    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+    // avec la valeur faisant autorité (Redis, via /ui-config). Clé
+    // "docsearch-theme-admin", partagée avec stats.html/admin-help.html
+    // (famille "administration") — distincte de "docsearch-theme"
+    // (index.html/help.html, famille "recherche"), voir theme_admin
+    // dans docsearch-api/ui_config.py.
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme-admin') || 'default'; } catch (e) {}
   </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text); }
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
     .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 14px 24px;
               display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px;
               position: sticky; top: 0; z-index: 10; }
     .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
     .header-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; }
-    .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; }
+    .header a { font-size: 14px; color: var(--color-primary); text-decoration: none;
+                display: inline-flex; align-items: center; gap: 6px; }
     .header-user { background: var(--color-accent-bg); color: var(--color-primary); font-size: 12px; font-weight: 500;
                    padding: 4px 10px; border-radius: 12px; }
     .header-user:empty { display: none; }
@@ -39,6 +43,9 @@
                        display: none; align-items: center; justify-content: center; z-index: 20; }
     .scroll-top-btn.show { display: flex; }
     .scroll-top-btn:hover { background: var(--color-primary-hover); }
+
+    .footer { max-width: 1100px; margin: 0 auto; border-top: 1px solid var(--color-border);
+              padding: 20px 24px 28px; font-size: 12px; color: var(--color-text-faint); }
 
     .panel { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 20px; }
     .panel h2 small { font-weight: 400; color: var(--color-text-faint); font-size: 12px; margin-left: 8px; }
@@ -114,8 +121,8 @@
   <header class="header">
     <span class="logo">DocSearch — Administration</span>
     <nav class="header-nav">
-      <a href="/admin-help.html">Aide</a>
-      <a href="/stats.html">Statistiques</a>
+      <a href="/admin-help.html"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6 1.3c0 1.5-2.1 1.7-2.1 3.2"/><path d="M12 17h.01"/></svg>Aide</a>
+      <a href="/stats.html"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>Statistiques</a>
       <a href="/">← Recherche</a>
     </nav>
     <span id="current-user" class="header-user"></span>
@@ -130,6 +137,10 @@
       <p class="muted">Chargement…</p>
     </div>
   </div>
+
+  <footer class="footer" id="page-footer">
+    <span>DocSearch — Administration</span>
+  </footer>
 
   <button id="scroll-top-btn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
           title="Retour en haut" aria-label="Retour en haut">↑</button>
@@ -540,7 +551,13 @@
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-footer" ${cfg.footer_enabled ? 'checked' : ''} />
-              Pied de page de la page de recherche
+              Pied de page des pages "recherche" (index.html, help.html)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-footer-admin" ${cfg.footer_enabled_admin ? 'checked' : ''} />
+              Pied de page des pages "administration" (cette page, stats.html, admin-help.html)
             </label>
           </div>
           <div class="row">
@@ -610,14 +627,24 @@
             </label>
           </div>
           <div class="row">
-            <label class="muted" for="ui-theme">Thème visuel :</label>
+            <label class="muted" for="ui-theme">Thème — Recherche :</label>
             <select id="ui-theme">
               <option value="default" ${cfg.theme === 'default' || !cfg.theme ? 'selected' : ''}>Clair</option>
               <option value="dark" ${cfg.theme === 'dark' ? 'selected' : ''}>Sombre</option>
               <option value="slate" ${cfg.theme === 'slate' ? 'selected' : ''}>Ardoise</option>
               <option value="contrast" ${cfg.theme === 'contrast' ? 'selected' : ''}>Contraste élevé</option>
             </select>
-            <span class="muted">appliqué sur admin.html, index.html, help.html et admin-help.html</span>
+            <span class="muted">index.html, help.html</span>
+          </div>
+          <div class="row">
+            <label class="muted" for="ui-theme-admin">Thème — Administration :</label>
+            <select id="ui-theme-admin">
+              <option value="default" ${cfg.theme_admin === 'default' || !cfg.theme_admin ? 'selected' : ''}>Clair</option>
+              <option value="dark" ${cfg.theme_admin === 'dark' ? 'selected' : ''}>Sombre</option>
+              <option value="slate" ${cfg.theme_admin === 'slate' ? 'selected' : ''}>Ardoise</option>
+              <option value="contrast" ${cfg.theme_admin === 'contrast' ? 'selected' : ''}>Contraste élevé</option>
+            </select>
+            <span class="muted">cette page, stats.html, admin-help.html</span>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -638,6 +665,20 @@
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ footer_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-footer-admin')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        // Appliqué tout de suite sur CETTE page (admin.html fait partie
+        // de la famille "administration") — stats.html/admin-help.html
+        // le prendront en compte à leur prochain chargement.
+        document.getElementById('page-footer').style.display = checked ? '' : 'none';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ footer_enabled_admin: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          document.getElementById('page-footer').style.display = checked ? 'none' : '';
           alert(`Erreur : ${err.message}`);
         }
       });
@@ -754,16 +795,34 @@
       });
       document.getElementById('ui-theme')?.addEventListener('change', async (e) => {
         const theme = e.target.value;
-        const previous = document.documentElement.dataset.theme;
-        // Appliqué tout de suite (sur CETTE page) sans attendre la réponse
-        // API — les autres pages (index.html/help.html/admin-help.html)
-        // le prendront en compte à leur prochain chargement.
-        document.documentElement.dataset.theme = theme;
+        const previous = e.target.dataset.previous || 'default';
+        // Sans effet visuel sur CETTE page (admin.html suit theme_admin,
+        // pas theme) — seuls index.html/help.html le prendront en compte,
+        // à leur prochain chargement.
         try {
           localStorage.setItem('docsearch-theme', theme);
-        } catch (err) { /* localStorage indisponible : sans effet sur cette page, juste pas de cache local */ }
+        } catch (err) { /* localStorage indisponible : sans effet, juste pas de cache local */ }
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ theme }) });
+          e.target.dataset.previous = theme;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-theme-admin')?.addEventListener('change', async (e) => {
+        const theme = e.target.value;
+        const previous = document.documentElement.dataset.theme;
+        // Appliqué tout de suite (sur CETTE page, qui fait partie de la
+        // famille "administration") sans attendre la réponse API —
+        // stats.html/admin-help.html le prendront en compte à leur
+        // prochain chargement.
+        document.documentElement.dataset.theme = theme;
+        try {
+          localStorage.setItem('docsearch-theme-admin', theme);
+        } catch (err) { /* localStorage indisponible : sans effet sur cette page, juste pas de cache local */ }
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ theme_admin: theme }) });
         } catch (err) {
           e.target.value = previous;
           document.documentElement.dataset.theme = previous;
@@ -1861,22 +1920,24 @@
     }, { passive: true });
 
     // Indépendant du panneau "Interface" (qui vit dans refresh(), plus
-    // lourd et re-rendu à chaque fois) — applique le thème dès que
-    // possible plutôt que d'attendre l'ensemble des panneaux.
-    async function loadTheme() {
+    // lourd et re-rendu à chaque fois) — applique thème et pied de page
+    // dès que possible plutôt que d'attendre l'ensemble des panneaux.
+    async function loadGlobalUiState() {
       try {
         const cfg = await api('/ui-config');
-        document.documentElement.dataset.theme = cfg.theme || 'default';
-        try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+        document.documentElement.dataset.theme = cfg.theme_admin || 'default';
+        try { localStorage.setItem('docsearch-theme-admin', cfg.theme_admin || 'default'); } catch (e) {}
+        document.getElementById('page-footer').style.display = cfg.footer_enabled_admin ? '' : 'none';
       } catch (e) {
         // Échec silencieux (API indisponible) : le thème mis en cache
-        // (localStorage, appliqué plus haut) reste affiché.
+        // (localStorage, appliqué plus haut) reste affiché ; le pied de
+        // page reste dans son état HTML par défaut (masqué).
       }
     }
 
     refresh();
     loadCurrentUser();
-    loadTheme();
+    loadGlobalUiState();
     setInterval(refreshStatusOnly, 5000);
   </script>
 </body>

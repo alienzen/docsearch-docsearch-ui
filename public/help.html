@@ -21,6 +21,9 @@
               position: sticky; top: 0; z-index: 10; }
     .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
     .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; margin-left: auto; }
+    #current-user { background: var(--color-bg-hover); color: var(--color-text-muted); padding: 4px 10px;
+                     border-radius: 99px; font-size: 12px; white-space: nowrap; }
+    #current-user:empty { display: none; }
 
     .container { max-width: 800px; margin: 0 auto; padding: 24px; }
     .panel { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 24px; }
@@ -35,12 +38,15 @@
     th { color: var(--color-text-faint); font-weight: 500; font-size: 12px; }
     kbd { background: var(--color-bg-hover); border: 1px solid var(--color-border-input); border-radius: 5px; padding: 2px 7px;
           font-family: ui-monospace, monospace; font-size: 12px; }
+    .footer { max-width: 800px; margin: 0 auto; border-top: 1px solid var(--color-border);
+              padding: 20px 24px 28px; font-size: 12px; color: var(--color-text-faint); }
   </style>
 </head>
 <body>
   <header class="header">
     <span class="logo">DocSearch</span>
     <a href="/">← Retour à la recherche</a>
+    <span id="current-user"></span>
   </header>
 
   <div class="container">
@@ -98,17 +104,40 @@
     </div>
   </div>
 
+  <footer class="footer" id="page-footer">
+    <span>DocSearch — Explorez, trouvez, comprenez</span>
+  </footer>
+
   <script>
     // Récupère le thème faisant autorité (réglé depuis admin.html) et
     // met à jour le cache local en conséquence — voir le script en tête
-    // de page pour l'application immédiate depuis ce cache.
+    // de page pour l'application immédiate depuis ce cache. Applique
+    // aussi le pied de page (même flag que index.html : footer_enabled).
     fetch('/ui-config').then(r => r.json()).then(cfg => {
       document.documentElement.dataset.theme = cfg.theme || 'default';
       try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+      document.getElementById('page-footer').style.display = cfg.footer_enabled ? '' : 'none';
     }).catch(() => {
       // Échec silencieux (API indisponible) : le thème mis en cache
-      // (localStorage, appliqué plus haut) reste affiché.
+      // (localStorage, appliqué plus haut) reste affiché ; le pied de
+      // page reste dans son état HTML par défaut (masqué).
     });
+
+    // Badge "Connecté : <utilisateur>" — même endpoint et mêmes flags
+    // que index.html (show_current_user_enabled/_groups_enabled),
+    // /is-admin étant public (jamais de 401/403).
+    Promise.all([fetch('/is-admin').then(r => r.json()), fetch('/ui-config').then(r => r.json())])
+      .then(([user, cfg]) => {
+        const el = document.getElementById('current-user');
+        el.style.display = cfg.show_current_user_enabled ? '' : 'none';
+        if (!user.user) return;
+        const groupsSuffix = (cfg.show_current_user_groups_enabled && user.groups && user.groups.length)
+          ? ` · ${user.groups.join(', ')}`
+          : '';
+        el.textContent = `Connecté : ${user.user}${groupsSuffix}`;
+      }).catch(() => {
+        // Échec silencieux (API indisponible) : badge non affiché.
+      });
   </script>
 </body>
 </html>

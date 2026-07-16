@@ -29,14 +29,17 @@
               flex-shrink: 0; }
     .header-top { display: flex; align-items: center; gap: 16px; }
     .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
-    .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; }
-    /* Combinateur d'enfant direct (>) plutôt qu'un sélecteur descendant :
-       .sources-select-panel (cases à cocher) est aussi niché dans
-       .search-wrap, plusieurs niveaux plus profond — un sélecteur
-       "input" générique les attrapait par erreur (flex:1, gros padding). */
-    .search-wrap > input { flex: 1; padding: 8px 14px; border: 1px solid var(--color-border-input);
-                         border-radius: 8px; font-size: 15px; outline: none; }
-    .search-wrap > input:focus { border-color: var(--color-primary); }
+    .search-wrap { flex: 1; display: flex; gap: 8px; max-width: 700px; position: relative; }
+    /* #q (id, plutôt que le combinateur d'enfant direct ">" utilisé
+       avant) : sélecteur explicite et robuste, indépendant de la
+       position de l'input dans .search-wrap — qui contient aussi
+       .sources-select-panel (cases à cocher), plusieurs niveaux plus
+       profond, qu'un sélecteur "input" générique attraperait à tort. */
+    #q { flex: 1; padding: 8px 14px 8px 38px; border: 1px solid var(--color-border-input);
+         border-radius: 8px; font-size: 15px; outline: none; }
+    #q:focus { border-color: var(--color-primary); }
+    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+                    width: 16px; height: 16px; color: var(--color-text-faint); pointer-events: none; }
     .btn-primary { padding: 8px 18px; background: var(--color-primary); color: var(--color-bg-surface); border: none;
                    border-radius: 8px; cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: var(--color-primary-hover); }
@@ -280,6 +283,7 @@
     <div class="header-top">
       <span class="logo">DocSearch</span>
       <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input id="q" type="search" placeholder='Rechercher dans vos documents… ("entre guillemets" pour une recherche exacte)'
                onkeydown="if(event.key==='Enter')doSearch()" />
         <div class="sources-select-wrap">

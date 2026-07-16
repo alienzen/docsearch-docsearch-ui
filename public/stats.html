@@ -8,10 +8,11 @@
   <script>
     // Applique tout de suite le dernier thème connu (cache localStorage,
     // par navigateur/poste) pour éviter un flash au thème par défaut le
-    // temps que /ui-config réponde (voir le script en bas de page). Même
-    // clé que index.html/admin.html/help.html/admin-help.html : un seul
-    // thème pour toute l'installation, pas de préférence par page.
-    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+    // temps que /ui-config réponde (voir le script en bas de page). Clé
+    // "docsearch-theme-admin", partagée avec admin.html/admin-help.html
+    // (famille "administration") — distincte de "docsearch-theme"
+    // (index.html/help.html, famille "recherche").
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme-admin') || 'default'; } catch (e) {}
   </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,12 +22,17 @@
               position: sticky; top: 0; z-index: 10; }
     .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
     .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; margin-left: auto; }
+    .header-user { background: var(--color-accent-bg); color: var(--color-primary); font-size: 12px; font-weight: 500;
+                   padding: 4px 10px; border-radius: 12px; }
+    .header-user:empty { display: none; }
 
     .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
     .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .link-button { background: none; border: none; color: var(--color-primary); font-size: 14px;
                    cursor: pointer; padding: 0; font-family: inherit; }
     #app { display: flex; flex-direction: column; gap: 24px; }
+    .footer { max-width: 1100px; margin: 0 auto; border-top: 1px solid var(--color-border);
+              padding: 20px 24px 28px; font-size: 12px; color: var(--color-text-faint); }
 
     .scroll-top-btn { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
                        border-radius: 50%; background: var(--color-primary); color: var(--color-bg-surface); border: none;
@@ -86,6 +92,7 @@
   <header class="header">
     <span class="logo">DocSearch — Statistiques de recherche</span>
     <a href="/admin.html">← Administration</a>
+    <span id="current-user" class="header-user"></span>
   </header>
 
   <div class="container">
@@ -96,6 +103,10 @@
       <p class="muted">Chargement…</p>
     </div>
   </div>
+
+  <footer class="footer" id="page-footer">
+    <span>DocSearch — Statistiques de recherche</span>
+  </footer>
 
   <button id="scroll-top-btn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
           title="Retour en haut" aria-label="Retour en haut">↑</button>
@@ -548,15 +559,34 @@
       document.getElementById('scroll-top-btn').classList.toggle('show', window.scrollY > 300);
     }, { passive: true });
 
-    // Récupère le thème faisant autorité (réglé depuis admin.html) et
-    // met à jour le cache local en conséquence — voir le script en tête
-    // de page pour l'application immédiate depuis ce cache.
+    // Récupère le thème (famille "administration") faisant autorité
+    // (réglé depuis admin.html) et met à jour le cache local en
+    // conséquence — voir le script en tête de page pour l'application
+    // immédiate depuis ce cache. Applique aussi le pied de page (même
+    // flag que admin.html : footer_enabled_admin).
     api('/ui-config').then(cfg => {
-      document.documentElement.dataset.theme = cfg.theme || 'default';
-      try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+      document.documentElement.dataset.theme = cfg.theme_admin || 'default';
+      try { localStorage.setItem('docsearch-theme-admin', cfg.theme_admin || 'default'); } catch (e) {}
+      document.getElementById('page-footer').style.display = cfg.footer_enabled_admin ? '' : 'none';
     }).catch(() => {
       // Échec silencieux (API indisponible) : le thème mis en cache
-      // (localStorage, appliqué plus haut) reste affiché.
+      // (localStorage, appliqué plus haut) reste affiché ; le pied de
+      // page reste dans son état HTML par défaut (masqué).
+    });
+
+    // Badge "Connecté : <utilisateur>" — même endpoint et mêmes flags
+    // que admin.html (show_current_user_enabled_admin/_groups_admin),
+    // /is-admin étant public (jamais de 401/403).
+    Promise.all([api('/is-admin'), api('/ui-config')]).then(([user, cfg]) => {
+      const el = document.getElementById('current-user');
+      el.style.display = cfg.show_current_user_enabled_admin ? '' : 'none';
+      if (!user.user) return;
+      const groupsSuffix = (cfg.show_current_user_groups_enabled_admin && user.groups && user.groups.length)
+        ? ` · ${user.groups.join(', ')}`
+        : '';
+      el.textContent = `Connecté : ${user.user}${groupsSuffix}`;
+    }).catch(() => {
+      // Échec silencieux (API indisponible) : badge non affiché.
     });
 
     refresh();
