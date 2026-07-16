@@ -5,6 +5,15 @@
   <title>DocSearch — Administration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/theme-admin.css" />
+  <script>
+    // Applique tout de suite le dernier thème connu (cache localStorage,
+    // par navigateur/poste) pour éviter un flash au thème par défaut le
+    // temps que /ui-config réponde — loadTheme() remet à jour ce cache
+    // avec la valeur faisant autorité (Redis, via /ui-config). Même clé
+    // que index.html/help.html/admin-help.html : un seul thème pour
+    // toute l'installation, pas de préférence par page.
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text); }
@@ -549,13 +558,13 @@
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-help" ${cfg.help_enabled ? 'checked' : ''} />
-              Lien "❓ Aide" dans l'en-tête de recherche (et raccourci clavier "?")
+              Lien "Aide" dans l'en-tête de recherche (et raccourci clavier "?")
             </label>
           </div>
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-lists" ${cfg.collections_enabled ? 'checked' : ''} />
-              Sélection de documents et collections personnelles ("📋 Mes collections")
+              Sélection de documents et collections personnelles ("Mes collections")
             </label>
           </div>
           <div class="row">
@@ -567,7 +576,7 @@
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-alerts" ${cfg.alerts_enabled ? 'checked' : ''} />
-              Alertes sur recherches sauvegardées ("🔔 Alertes" dans l'en-tête)
+              Alertes sur recherches sauvegardées ("Alertes" dans l'en-tête)
             </label>
           </div>
           <div class="row">
@@ -599,6 +608,16 @@
               <input type="checkbox" id="ui-show-user-groups-admin" ${cfg.show_current_user_groups_enabled_admin ? 'checked' : ''} />
               Inclure les groupes LDAP dans ce badge d'administration ("· &lt;groupes&gt;")
             </label>
+          </div>
+          <div class="row">
+            <label class="muted" for="ui-theme">Thème visuel :</label>
+            <select id="ui-theme">
+              <option value="default" ${cfg.theme === 'default' || !cfg.theme ? 'selected' : ''}>Clair</option>
+              <option value="dark" ${cfg.theme === 'dark' ? 'selected' : ''}>Sombre</option>
+              <option value="slate" ${cfg.theme === 'slate' ? 'selected' : ''}>Ardoise</option>
+              <option value="contrast" ${cfg.theme === 'contrast' ? 'selected' : ''}>Contraste élevé</option>
+            </select>
+            <span class="muted">appliqué sur admin.html, index.html, help.html et admin-help.html</span>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
     }
@@ -730,6 +749,24 @@
           e.target.checked = !checked;
           uiConfigCache.show_current_user_groups_enabled_admin = !checked;
           updateCurrentUserBadge();
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-theme')?.addEventListener('change', async (e) => {
+        const theme = e.target.value;
+        const previous = document.documentElement.dataset.theme;
+        // Appliqué tout de suite (sur CETTE page) sans attendre la réponse
+        // API — les autres pages (index.html/help.html/admin-help.html)
+        // le prendront en compte à leur prochain chargement.
+        document.documentElement.dataset.theme = theme;
+        try {
+          localStorage.setItem('docsearch-theme', theme);
+        } catch (err) { /* localStorage indisponible : sans effet sur cette page, juste pas de cache local */ }
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ theme }) });
+        } catch (err) {
+          e.target.value = previous;
+          document.documentElement.dataset.theme = previous;
           alert(`Erreur : ${err.message}`);
         }
       });
@@ -1823,8 +1860,23 @@
       document.getElementById('scroll-top-btn').classList.toggle('show', window.scrollY > 300);
     }, { passive: true });
 
+    // Indépendant du panneau "Interface" (qui vit dans refresh(), plus
+    // lourd et re-rendu à chaque fois) — applique le thème dès que
+    // possible plutôt que d'attendre l'ensemble des panneaux.
+    async function loadTheme() {
+      try {
+        const cfg = await api('/ui-config');
+        document.documentElement.dataset.theme = cfg.theme || 'default';
+        try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+      } catch (e) {
+        // Échec silencieux (API indisponible) : le thème mis en cache
+        // (localStorage, appliqué plus haut) reste affiché.
+      }
+    }
+
     refresh();
     loadCurrentUser();
+    loadTheme();
     setInterval(refreshStatusOnly, 5000);
   </script>
 </body>

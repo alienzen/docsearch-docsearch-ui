@@ -4,27 +4,37 @@
   <meta charset="UTF-8" />
   <title>DocSearch — Aide administrateur</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/theme-admin.css" />
+  <script>
+    // Applique tout de suite le dernier thème connu (cache localStorage,
+    // par navigateur/poste) pour éviter un flash au thème par défaut le
+    // temps que /ui-config réponde (voir le script en bas de page). Même
+    // clé que index.html/admin.html/help.html : un seul thème pour toute
+    // l'installation, pas de préférence par page.
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a18; }
-    .header { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 14px 24px;
-              display: flex; align-items: center; gap: 16px; }
-    .logo { font-size: 16px; font-weight: 600; color: #185FA5; }
-    .header a { font-size: 14px; color: #185FA5; text-decoration: none; margin-left: auto; }
+    body { font-family: system-ui, sans-serif; background: var(--color-bg-page); color: var(--color-text); }
+    .header { background: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); padding: 14px 24px;
+              display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px;
+              position: sticky; top: 0; z-index: 10; }
+    .logo { font-size: 16px; font-weight: 600; color: var(--color-primary); }
+    .header a { font-size: 14px; color: var(--color-primary); text-decoration: none; margin-left: auto; }
 
     .container { max-width: 800px; margin: 0 auto; padding: 24px; }
-    .panel { background: #fff; border: 1px solid #e5e5e0; border-radius: 10px; padding: 24px; }
+    .panel { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 24px; }
     .panel h1 { font-size: 18px; margin-bottom: 16px; }
-    .panel h2 { font-size: 14px; color: #185FA5; margin: 20px 0 8px; }
+    .panel h2 { font-size: 14px; color: var(--color-primary); margin: 20px 0 8px; }
     .panel h2:first-of-type { margin-top: 0; }
-    .panel p { font-size: 13px; line-height: 1.6; color: #333; margin-bottom: 8px; }
-    .panel ul { margin: 8px 0 8px 20px; font-size: 13px; line-height: 1.6; color: #333; }
-    .muted { color: #888; font-size: 12px; }
+    .panel p { font-size: 13px; line-height: 1.6; color: var(--color-text-secondary); margin-bottom: 8px; }
+    .panel ul { margin: 8px 0 8px 20px; font-size: 13px; line-height: 1.6; color: var(--color-text-secondary); }
+    .muted { color: var(--color-text-faint); font-size: 12px; }
 
     table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
-    th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #eee; }
-    th { color: #888; font-weight: 500; font-size: 12px; }
-    kbd { background: #f0f0ec; border: 1px solid #d5d5ce; border-radius: 5px; padding: 2px 7px;
+    th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--color-border-light); }
+    th { color: var(--color-text-faint); font-weight: 500; font-size: 12px; }
+    kbd { background: var(--color-bg-hover); border: 1px solid var(--color-border-input); border-radius: 5px; padding: 2px 7px;
           font-family: ui-monospace, monospace; font-size: 12px; }
   </style>
 </head>
@@ -63,5 +73,18 @@
       <p>Consultez la documentation du projet (docsearch-docs) ou contactez l'équipe technique.</p>
     </div>
   </div>
+
+  <script>
+    // Récupère le thème faisant autorité (réglé depuis admin.html) et
+    // met à jour le cache local en conséquence — voir le script en tête
+    // de page pour l'application immédiate depuis ce cache.
+    fetch('/ui-config').then(r => r.json()).then(cfg => {
+      document.documentElement.dataset.theme = cfg.theme || 'default';
+      try { localStorage.setItem('docsearch-theme', cfg.theme || 'default'); } catch (e) {}
+    }).catch(() => {
+      // Échec silencieux (API indisponible) : le thème mis en cache
+      // (localStorage, appliqué plus haut) reste affiché.
+    });
+  </script>
 </body>
 </html>

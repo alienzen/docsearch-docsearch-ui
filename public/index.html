@@ -5,6 +5,13 @@
   <title>DocSearch — Explorez, trouvez, comprenez</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/theme-search.css" />
+  <script>
+    // Applique tout de suite le dernier thème connu (cache localStorage,
+    // par navigateur/poste) pour éviter un flash au thème par défaut le
+    // temps que /ui-config réponde — loadUiConfig() remet à jour ce
+    // cache avec la valeur faisant autorité (Redis, via /ui-config).
+    try { document.documentElement.dataset.theme = localStorage.getItem('docsearch-theme') || 'default'; } catch (e) {}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
@@ -131,33 +138,39 @@
 
     .stats-bar { display: flex; justify-content: space-between; align-items: center;
                  margin-bottom: 12px; font-size: 13px; color: var(--color-text-muted); }
+    .toolbar-action { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px;
+                       color: var(--color-primary); background: none; border: none; cursor: pointer;
+                       padding: 5px 8px; border-radius: 6px; font-family: inherit; white-space: nowrap; }
+    .toolbar-action:hover { background: var(--color-bg-hover); }
     .sort-select { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-mid); }
     .sort-select select { border: 1px solid var(--color-border-input); border-radius: 6px; padding: 4px 8px;
                           font-size: 13px; background: var(--color-bg-surface); cursor: pointer; }
 
-    .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px;
-                   margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s; }
+    .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 18px 20px;
+                   margin-bottom: 12px; transition: border-color 0.15s, box-shadow 0.15s; }
     .result-card-compact { padding: 8px 16px; margin-bottom: 4px; }
     .result-card-compact .result-header { margin-bottom: 0; cursor: pointer; }
     .result-card:hover { border-color: var(--color-border-hover); box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.08); }
     .result-card.kbd-focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb),0.25); }
-    .result-header { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 6px;
+    .result-header { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 8px;
                      cursor: pointer; user-select: none; }
     .result-card.collapsed .result-header { margin-bottom: 0; }
-    .result-caret { font-size: 10px; color: var(--color-text-faint-2); flex-shrink: 0; transition: transform 0.15s; margin-top: 4px; }
+    .result-caret { font-size: 10px; color: var(--color-text-faint-2); flex-shrink: 0; transition: transform 0.15s; margin-top: 6px; }
     .result-card.collapsed .result-caret { transform: rotate(-90deg); }
     .result-card.collapsed .result-body { display: none; }
-    .ext-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center;
-                justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-    .result-title { font-size: 15px; font-weight: 600; color: var(--color-primary); margin-bottom: 4px; }
-    .result-meta { display: flex; gap: 14px; font-size: 12px; color: var(--color-text-faint); flex-wrap: wrap; }
-    .result-meta span { display: flex; align-items: center; gap: 4px; }
+    .ext-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center;
+                justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; letter-spacing: 0.02em; }
+    .result-title { font-size: 15.5px; font-weight: 600; color: var(--color-primary); margin-bottom: 5px;
+                    line-height: 1.35; }
+    .result-meta { display: flex; gap: 16px; font-size: 12px; color: var(--color-text-faint); flex-wrap: wrap;
+                   row-gap: 6px; }
+    .result-meta span { display: flex; align-items: center; gap: 5px; }
     .source-badge { display: flex; align-items: center; gap: 5px; }
     .source-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center;
                   justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
     .highlight { background: var(--color-highlight-bg); color: var(--color-text); padding: 0 3px; border-radius: 3px; font-weight: 600; }
-    .snippet { font-size: 13px; color: var(--color-text-mid); line-height: 1.65; margin-top: 8px;
-               border-left: 3px solid var(--color-accent-bg); padding-left: 12px; }
+    .snippet { font-size: 13px; color: var(--color-text-mid); line-height: 1.65; margin-top: 10px;
+               border-left: 3px solid var(--color-accent-bg); padding-left: 14px; }
     .score-pill { font-size: 11px; color: var(--color-text-faint); background: var(--color-bg-page); padding: 2px 8px;
                   border-radius: 99px; flex-shrink: 0; }
     .result-detail-btn { font-size: 12px; color: var(--color-primary); background: none; border: none; cursor: pointer;
@@ -169,7 +182,8 @@
                           padding: 10px 14px; background: var(--color-accent-bg); border-radius: 10px;
                           font-size: 13px; color: var(--color-primary); }
     .selection-toolbar button { font-size: 13px; color: var(--color-primary); background: none; border: none;
-                                 cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit; }
+                                 cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit;
+                                 display: inline-flex; align-items: center; gap: 5px; }
     .collection-picker-btn { display: flex; justify-content: space-between; align-items: center; width: 100%;
                         text-align: left; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px;
                         background: var(--color-bg-surface); cursor: pointer; font-size: 13px; color: var(--color-text-secondary); font-family: inherit; }
@@ -353,12 +367,12 @@
       <main>
         <div class="stats-bar">
           <span id="result-count" style="display:none;"></span>
-          <div id="results-actions" style="display:none; align-items:center; gap:16px;">
-            <button class="clear-link" style="margin-top:0;" onclick="saveCurrentSearch()">★ Enregistrer cette recherche</button>
-            <button class="clear-link" id="compact-view-toggle" style="margin-top:0;" onclick="toggleCompactView()">▤ Vue compacte</button>
-            <span id="export-actions" style="display:none; align-items:center; gap:16px;">
-              <button class="clear-link" style="margin-top:0;" onclick="exportResults('xlsx')">⬇ Exporter en XLSX</button>
-              <button class="clear-link" style="margin-top:0;" onclick="exportResults('docx')">⬇ Exporter en DOCX</button>
+          <div id="results-actions" style="display:none; align-items:center; gap:6px;">
+            <button class="toolbar-action" onclick="saveCurrentSearch()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.3 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.3 6.1-.7z"/></svg>Enregistrer cette recherche</button>
+            <button class="toolbar-action" id="compact-view-toggle" onclick="toggleCompactView()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>Vue compacte</button>
+            <span id="export-actions" style="display:none; align-items:center; gap:6px;">
+              <button class="toolbar-action" onclick="exportResults('xlsx')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>Exporter en XLSX</button>
+              <button class="toolbar-action" onclick="exportResults('docx')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>Exporter en DOCX</button>
             </span>
           <div class="sort-select" id="sort-select-wrap">
             Trier par :
@@ -373,7 +387,7 @@
         </div>
         <div class="selection-toolbar" id="selection-toolbar">
           <span class="selection-count"></span>
-          <button onclick="openAddToCollectionModal()">📋 Ajouter à une collection</button>
+          <button onclick="openAddToCollectionModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3" rx="1"/><path d="M9 11h6M9 15h6"/></svg>Ajouter à une collection</button>
           <button onclick="clearSelection()">Annuler la sélection</button>
         </div>
         <div id="results"><p class="empty">Lancez une recherche pour voir les résultats.</p></div>
@@ -515,7 +529,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true, theme: 'default' };
     let isAdminCache = false;
     // Rempli par loadIsAdmin() — séparé de uiConfigCache (qui ne porte que
     // des bascules) pour que updateCurrentUserText() puisse recalculer le
@@ -569,6 +583,8 @@
       if (!uiConfigCache.collections_enabled) clearSelection();
       document.getElementById('alerts-wrap').style.display = uiConfigCache.alerts_enabled ? '' : 'none';
       document.getElementById('sort-select-wrap').style.display = uiConfigCache.sort_enabled ? '' : 'none';
+      document.documentElement.dataset.theme = uiConfigCache.theme || 'default';
+      try { localStorage.setItem('docsearch-theme', uiConfigCache.theme || 'default'); } catch (e) {}
       updateAdminLinksVisibility();
       updateCurrentUserVisibility();
       updateCurrentUserText();
@@ -800,6 +816,11 @@
     const ICON_TAGS         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/></svg>';
     const ICON_WORLD        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18"/></svg>';
     const ICON_ROUTE        = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a4 4 0 0 0 4 4h4"/></svg>';
+    const ICON_GRID         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>';
+    const ICON_LIST         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>';
+    const ICON_DOWNLOAD     = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>';
+    const ICON_BELL         = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
+    const ICON_CLIPBOARD    = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3" rx="1"/><path d="M9 11h6M9 15h6"/></svg>';
 
     function fmtSize(bytes) {
       if (!bytes) return '—';
@@ -1222,7 +1243,10 @@
       const archiveNote = isArchiveMember
         ? `<span class="archive-badge">${ICON_FILE_ZIP}Extrait d'une archive</span>`
         : '';
-      const bodyIndent = showSelectCb ? 75 : 48;
+      // 52 = ext-icon (38px) + gap .result-header (14px) ; 81 = + case à
+      // cocher (15px) + son propre gap — garde le corps (métadonnées,
+      // chemin) aligné visuellement sous le titre, pas sous l'icône.
+      const bodyIndent = showSelectCb ? 81 : 52;
       return `
       <div class="result-card${state.resultsCompact ? ' collapsed' : ''}" data-doc-id="${r.id}">
         <div class="result-header" onclick="toggleResultAccordion(this.closest('.result-card'))">
@@ -1284,7 +1308,7 @@
 
     function updateCompactToggleLabel() {
       const btn = document.getElementById('compact-view-toggle');
-      if (btn) btn.textContent = state.resultsCompact ? '▥ Vue détaillée' : '▤ Vue compacte';
+      if (btn) btn.innerHTML = state.resultsCompact ? `${ICON_LIST}Vue détaillée` : `${ICON_GRID}Vue compacte`;
     }
 
     function toggleCompactView() {
@@ -1655,7 +1679,7 @@
             <div class="saved-item-alert">
               <label class="alert-toggle-label">
                 <input type="checkbox" class="alert-toggle" ${s.alert_enabled ? 'checked' : ''} />
-                🔔 M'alerter
+                ${ICON_BELL}M'alerter
               </label>
               <select class="alert-frequency" ${s.alert_enabled ? '' : 'disabled'}>
                 <option value="daily" ${s.alert_frequency !== 'weekly' ? 'selected' : ''}>tous les jours</option>
@@ -1949,7 +1973,7 @@
       const n = selectedDocs.size;
       card.innerHTML = `
         <button class="modal-close" onclick="closeCollectionsModal()" aria-label="Fermer">✕</button>
-        <p style="font-weight:600;font-size:15px;margin-bottom:12px;">📋 Ajouter ${n} document${n > 1 ? 's' : ''} à une collection</p>
+        <p style="font-weight:600;font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:6px;">${ICON_CLIPBOARD}Ajouter ${n} document${n > 1 ? 's' : ''} à une collection</p>
         <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px;">
           ${myCollectionsCache.map(l => `
             <button class="collection-picker-btn" data-collection-id="${l.id}">
