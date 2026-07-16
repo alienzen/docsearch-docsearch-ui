@@ -85,6 +85,20 @@
   --color-archive-bg:   #FFF3E0;
   --color-archive-text: #B34000;
   --color-highlight-bg: #FFF200;
+
+  /* Formes — un jeton par valeur en usage (pas de bucket "petit/moyen/
+     grand" qui forcerait des éléments visuellement différents à
+     converger) : chaque thème peut faire varier chacune indépendamment
+     sans toucher aux autres. --radius-pill (chips/badges) n'a pas
+     vocation à changer : un thème qui carre les angles garde ses puces
+     pleinement arrondies (voir [data-theme="dsfr"] plus bas). */
+  --radius-3:    3px;
+  --radius-5:    5px;
+  --radius-6:    6px;
+  --radius-8:    8px;
+  --radius-10:   10px;
+  --radius-12:   12px;
+  --radius-pill: 99px;
 }
 
 /* ── Thèmes alternatifs ────────────────────────────────────────
@@ -343,4 +357,16 @@
   --color-archive-bg:   #FFF3E0;
   --color-archive-text: #B34000;
   --color-highlight-bg: #FFF200;
+
+  /* Angles carrés — la convention de forme du DSFR (boutons, cartes,
+     champs...). Seules les puces pleinement arrondies (--radius-pill,
+     non redéfini ici) y échappent, comme dans le DSFR officiel où les
+     badges/tags restent en pilule (9999px) pendant que tout le reste
+     est à 0. */
+  --radius-3:  0;
+  --radius-5:  0;
+  --radius-6:  0;
+  --radius-8:  0;
+  --radius-10: 0;
+  --radius-12: 0;
 }

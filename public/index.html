@@ -36,19 +36,19 @@
        .sources-select-panel (cases à cocher), plusieurs niveaux plus
        profond, qu'un sélecteur "input" générique attraperait à tort. */
     #q { flex: 1; padding: 8px 14px 8px 38px; border: 1px solid var(--color-border-input);
-         border-radius: 8px; font-size: 15px; outline: none; }
+         border-radius: var(--radius-8); font-size: 15px; outline: none; }
     #q:focus { border-color: var(--color-primary); }
     .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
                     width: 16px; height: 16px; color: var(--color-text-faint); pointer-events: none; }
     .btn-primary { padding: 8px 18px; background: var(--color-primary); color: var(--color-bg-surface); border: none;
-                   border-radius: 8px; cursor: pointer; font-size: 14px; }
+                   border-radius: var(--radius-8); cursor: pointer; font-size: 14px; }
     .btn-primary:hover { background: var(--color-primary-hover); }
-    .btn-reset { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--color-border-input);
+    .btn-reset { padding: 8px 14px; border-radius: var(--radius-8); border: 1px solid var(--color-border-input);
                  background: var(--color-bg-surface); color: var(--color-text-muted); cursor: pointer; font-size: 13px; }
     .btn-reset:hover { background: var(--color-bg-page); color: var(--color-text-secondary); }
     .header-links { display: flex; gap: 16px; align-items: center; justify-content: flex-end; }
     .header-links a { font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-    #current-user { background: var(--color-bg-hover); color: var(--color-text-muted); padding: 4px 10px; border-radius: 99px;
+    #current-user { background: var(--color-bg-hover); color: var(--color-text-muted); padding: 4px 10px; border-radius: var(--radius-pill);
                     font-size: 12px; margin-left: auto; white-space: nowrap; }
 
     /* ── Présélection de sources (avant recherche) ────────────── */
@@ -58,14 +58,14 @@
        étirement à son tour, plutôt que de garder sa hauteur naturelle et
        flotter mal aligné en haut de son enveloppe. */
     .sources-select-wrap { position: relative; display: flex; flex-shrink: 0; }
-    .sources-select-toggle { padding: 8px 10px; border: 1px solid var(--color-border-input); border-radius: 8px;
+    .sources-select-toggle { padding: 8px 10px; border: 1px solid var(--color-border-input); border-radius: var(--radius-8);
                               font-size: 13px; font-family: inherit; background: var(--color-bg-surface); color: var(--color-text-mid); cursor: pointer;
                               white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .sources-select-panel { display: none; position: absolute; top: 38px; left: 0; min-width: 220px;
                              max-height: 280px; overflow-y: auto; background: var(--color-bg-surface); border: 1px solid var(--color-border);
-                             border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
+                             border-radius: var(--radius-10); box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
     .sources-select-panel.open { display: block; }
-    .sources-select-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    .sources-select-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-6);
                             cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
     .sources-select-item:hover { background: var(--color-bg-page); }
     .sources-select-item input { flex-shrink: 0; }
@@ -76,10 +76,10 @@
                     display: inline-flex; align-items: center; gap: 6px; }
     .saved-panel { display: none; position: absolute; top: 28px; right: 0; width: 320px;
                    max-height: 380px; overflow-y: auto; background: var(--color-bg-surface); border: 1px solid var(--color-border);
-                   border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
+                   border-radius: var(--radius-10); box-shadow: 0 6px 20px rgba(0,0,0,0.1); padding: 8px; z-index: 50; }
     .saved-panel.open { display: block; }
     .saved-empty { font-size: 12px; color: var(--color-text-faint); padding: 12px 10px; text-align: center; }
-    .saved-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    .saved-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-8);
                   cursor: pointer; }
     .saved-item:hover { background: var(--color-bg-page); }
     .saved-item-main { flex: 1; min-width: 0; }
@@ -89,25 +89,25 @@
                          text-overflow: ellipsis; }
     .saved-item-criteria { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
     .saved-crit-tag { font-size: 10px; background: var(--color-bg-hover); color: var(--color-text-muted); padding: 2px 7px;
-                       border-radius: 99px; white-space: nowrap; }
+                       border-radius: var(--radius-pill); white-space: nowrap; }
     .saved-item-delete { flex-shrink: 0; border: none; background: none; color: var(--color-text-faint-2); cursor: pointer;
-                          width: 22px; height: 22px; border-radius: 5px; display: inline-flex;
+                          width: 22px; height: 22px; border-radius: var(--radius-5); display: inline-flex;
                           align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
     .saved-item-delete:hover { background: var(--color-error-bg); color: var(--color-danger); }
     .saved-item-alert { display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: default; }
     .alert-toggle-label { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-muted);
                            cursor: pointer; white-space: nowrap; }
-    .alert-frequency { font-size: 11px; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: 5px;
+    .alert-frequency { font-size: 11px; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: var(--radius-5);
                         padding: 1px 4px; background: var(--color-bg-surface); }
     .alerts-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px;
-                    height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 99px; background: var(--color-danger);
+                    height: 16px; padding: 0 4px; margin-left: 4px; border-radius: var(--radius-pill); background: var(--color-danger);
                     color: var(--color-bg-surface); font-size: 10px; font-weight: 700; line-height: 1; vertical-align: middle; }
     .alert-item { cursor: pointer; }
 
     .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; width: 100%; flex: 1; }
     .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; min-height: 24px; }
     .active-filter-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-                          padding: 4px 6px 4px 12px; border-radius: 99px; background: var(--color-accent-bg); color: var(--color-primary); }
+                          padding: 4px 6px 4px 12px; border-radius: var(--radius-pill); background: var(--color-accent-bg); color: var(--color-primary); }
     .active-filter-chip button { background: none; border: none; color: var(--color-primary); cursor: pointer;
                                  display: flex; padding: 2px; }
     .active-filter-chip button svg { width: 12px; height: 12px; }
@@ -115,7 +115,7 @@
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
     @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .sidebar { display: none; } }
 
-    .sidebar { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px;
+    .sidebar { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-12); padding: 16px;
                height: fit-content; position: sticky; top: 76px; }
     .facet-section { margin-bottom: 18px; }
     .facet-section:last-child { margin-bottom: 0; }
@@ -126,16 +126,16 @@
     .facet-section.collapsed .facet-caret { transform: rotate(-90deg); }
     .facet-section.collapsed .facet-body { display: none; }
     .facet-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 6px;
-                 border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
+                 border-radius: var(--radius-6); cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
     .facet-row:hover { background: var(--color-bg-hover); }
     .facet-row.active { background: var(--color-accent-bg); color: var(--color-primary); font-weight: 500; }
-    .facet-count { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-faint); padding: 1px 6px; border-radius: 99px; }
+    .facet-count { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-faint); padding: 1px 6px; border-radius: var(--radius-pill); }
     .facet-row.active .facet-count { background: transparent; color: var(--color-primary); }
     .facet-empty { font-size: 12px; color: var(--color-text-faint-2); padding: 4px 6px; }
     .date-range { display: flex; flex-direction: column; gap: 6px; }
     .date-range label { font-size: 11px; color: var(--color-text-faint-2); }
     .date-range input { font-size: 12px; height: 30px; padding: 4px 8px; border: 1px solid var(--color-border-input);
-                        border-radius: 6px; width: 100%; }
+                        border-radius: var(--radius-6); width: 100%; }
     .clear-link { font-size: 11px; color: var(--color-primary); cursor: pointer; background: none; border: none;
                   padding: 0; margin-top: 4px; text-decoration: underline; }
 
@@ -143,13 +143,13 @@
                  margin-bottom: 12px; font-size: 13px; color: var(--color-text-muted); }
     .toolbar-action { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px;
                        color: var(--color-primary); background: none; border: none; cursor: pointer;
-                       padding: 5px 8px; border-radius: 6px; font-family: inherit; white-space: nowrap; }
+                       padding: 5px 8px; border-radius: var(--radius-6); font-family: inherit; white-space: nowrap; }
     .toolbar-action:hover { background: var(--color-bg-hover); }
     .sort-select { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-mid); }
-    .sort-select select { border: 1px solid var(--color-border-input); border-radius: 6px; padding: 4px 8px;
+    .sort-select select { border: 1px solid var(--color-border-input); border-radius: var(--radius-6); padding: 4px 8px;
                           font-size: 13px; background: var(--color-bg-surface); cursor: pointer; }
 
-    .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 18px 20px;
+    .result-card { background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: var(--radius-12); padding: 18px 20px;
                    margin-bottom: 12px; transition: border-color 0.15s, box-shadow 0.15s; }
     .result-card-compact { padding: 8px 16px; margin-bottom: 4px; }
     .result-card-compact .result-header { margin-bottom: 0; cursor: pointer; }
@@ -161,7 +161,7 @@
     .result-caret { font-size: 10px; color: var(--color-text-faint-2); flex-shrink: 0; transition: transform 0.15s; margin-top: 6px; }
     .result-card.collapsed .result-caret { transform: rotate(-90deg); }
     .result-card.collapsed .result-body { display: none; }
-    .ext-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center;
+    .ext-icon { width: 38px; height: 38px; border-radius: var(--radius-8); display: flex; align-items: center;
                 justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; letter-spacing: 0.02em; }
     .result-title { font-size: 15.5px; font-weight: 600; color: var(--color-primary); margin-bottom: 5px;
                     line-height: 1.35; }
@@ -171,24 +171,24 @@
     .source-badge { display: flex; align-items: center; gap: 5px; }
     .source-dot { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center;
                   justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
-    .highlight { background: var(--color-highlight-bg); color: var(--color-text); padding: 0 3px; border-radius: 3px; font-weight: 600; }
+    .highlight { background: var(--color-highlight-bg); color: var(--color-text); padding: 0 3px; border-radius: var(--radius-3); font-weight: 600; }
     .snippet { font-size: 13px; color: var(--color-text-mid); line-height: 1.65; margin-top: 10px;
                border-left: 3px solid var(--color-accent-bg); padding-left: 14px; }
     .score-pill { font-size: 11px; color: var(--color-text-faint); background: var(--color-bg-page); padding: 2px 8px;
-                  border-radius: 99px; flex-shrink: 0; }
+                  border-radius: var(--radius-pill); flex-shrink: 0; }
     .result-detail-btn { font-size: 12px; color: var(--color-primary); background: none; border: none; cursor: pointer;
                           padding: 0; margin-top: 8px; text-decoration: underline; font-family: inherit; }
     .result-select-cb { margin-top: 8px; flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
 
     /* ── Sélection de documents / collections personnelles ────── */
     .selection-toolbar { display: none; align-items: center; gap: 14px; margin-bottom: 12px;
-                          padding: 10px 14px; background: var(--color-accent-bg); border-radius: 10px;
+                          padding: 10px 14px; background: var(--color-accent-bg); border-radius: var(--radius-10);
                           font-size: 13px; color: var(--color-primary); }
     .selection-toolbar button { font-size: 13px; color: var(--color-primary); background: none; border: none;
                                  cursor: pointer; padding: 0; text-decoration: underline; font-family: inherit;
                                  display: inline-flex; align-items: center; gap: 5px; }
     .collection-picker-btn { display: flex; justify-content: space-between; align-items: center; width: 100%;
-                        text-align: left; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px;
+                        text-align: left; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-8);
                         background: var(--color-bg-surface); cursor: pointer; font-size: 13px; color: var(--color-text-secondary); font-family: inherit; }
     .collection-picker-btn:hover { background: var(--color-bg-page); }
     .collection-doc-row { display: flex; align-items: center; gap: 8px; padding: 7px 0;
@@ -198,20 +198,20 @@
                        white-space: nowrap; color: var(--color-primary); font-size: 13px; text-decoration: none; }
     .collection-doc-row a:hover { text-decoration: underline; }
     .archive-badge { font-size: 11px; color: var(--color-archive-text); background: var(--color-archive-bg); padding: 2px 8px;
-                     border-radius: 99px; display: inline-flex; align-items: center; gap: 4px; }
+                     border-radius: var(--radius-pill); display: inline-flex; align-items: center; gap: 4px; }
     .result-path { font-family: ui-monospace, monospace; font-size: 11px; color: var(--color-text-faint-2); margin-top: 4px;
                    display: flex; align-items: center; gap: 4px; }
     .result-path .path-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                                flex: 1; min-width: 0; }
     .copy-icon-btn { flex-shrink: 0; border: none; background: none; color: var(--color-text-faint-2); cursor: pointer;
-                     width: 22px; height: 22px; padding: 0; border-radius: 5px; display: inline-flex;
+                     width: 22px; height: 22px; padding: 0; border-radius: var(--radius-5); display: inline-flex;
                      align-items: center; justify-content: center; }
     .copy-icon-btn:hover { background: var(--color-bg-hover); color: var(--color-primary); }
     .copy-icon-btn.copied { color: var(--color-success); }
 
     .pagination { display: flex; gap: 6px; justify-content: center; margin-top: 20px; }
     .page-btn { min-width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
-                border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-bg-surface); cursor: pointer;
+                border-radius: var(--radius-8); border: 1px solid var(--color-border); background: var(--color-bg-surface); cursor: pointer;
                 font-size: 13px; color: var(--color-text-secondary); }
     .page-btn:hover { background: var(--color-bg-hover); }
     .page-btn.active { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
@@ -235,7 +235,7 @@
     .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,24,0.45); display: none;
                      align-items: center; justify-content: center; z-index: 100; padding: 20px; }
     .modal-overlay.open { display: flex; }
-    .modal-card { background: var(--color-bg-surface); border-radius: 12px; max-width: 560px; width: 100%;
+    .modal-card { background: var(--color-bg-surface); border-radius: var(--radius-12); max-width: 560px; width: 100%;
                   max-height: 85vh; overflow-y: auto; padding: 24px; position: relative; }
     .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none;
                    cursor: pointer; color: var(--color-text-faint); font-size: 20px; line-height: 1; padding: 4px; }
@@ -245,32 +245,32 @@
     .modal-row:last-child { border-bottom: none; }
     .modal-row .k { color: var(--color-text-faint); display: flex; align-items: center; gap: 6px; }
     .modal-row .v { color: var(--color-text); text-align: right; }
-    .modal-banner { background: var(--color-archive-bg); color: var(--color-archive-text); border-radius: 8px; padding: 10px 14px;
+    .modal-banner { background: var(--color-archive-bg); color: var(--color-archive-text); border-radius: var(--radius-8); padding: 10px 14px;
                     font-size: 12px; margin-bottom: 16px; display: flex; gap: 8px; align-items: flex-start; }
     .modal-acl { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-    .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--color-bg-page);
+    .acl-tag { font-size: 12px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--color-bg-page);
                color: var(--color-text-mid); display: flex; align-items: center; gap: 5px; }
     .keyword-remove-btn { flex-shrink: 0; width: 14px; height: 14px; display: inline-flex;
-                           align-items: center; justify-content: center; border-radius: 3px; }
+                           align-items: center; justify-content: center; border-radius: var(--radius-3); }
     .keyword-remove-btn svg { width: 10px; height: 10px; }
     .keyword-remove-btn:hover { background: var(--color-border); color: var(--color-danger-alt); }
     .modal-preview-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
-                         background: var(--color-primary); color: var(--color-bg-surface); border-radius: 8px; text-decoration: none;
+                         background: var(--color-primary); color: var(--color-bg-surface); border-radius: var(--radius-8); text-decoration: none;
                          font-size: 13px; margin-top: 4px; }
     .modal-preview-btn:hover { background: var(--color-primary-hover); }
 
     /* ── Pouce haut/bas (feedback par recherche) ─────────────── */
     .feedback-bar { display: flex; align-items: center; gap: 10px; justify-content: center;
                     margin-top: 18px; padding: 14px; background: var(--color-bg-surface); border: 1px solid var(--color-border);
-                    border-radius: 10px; font-size: 13px; color: var(--color-text-muted); }
-    .feedback-btn { border: 1px solid var(--color-border-input); background: var(--color-bg-surface); border-radius: 8px; cursor: pointer;
+                    border-radius: var(--radius-10); font-size: 13px; color: var(--color-text-muted); }
+    .feedback-btn { border: 1px solid var(--color-border-input); background: var(--color-bg-surface); border-radius: var(--radius-8); cursor: pointer;
                     font-size: 16px; padding: 5px 12px; line-height: 1; }
     .feedback-btn:hover:not(:disabled) { background: var(--color-bg-page); }
     .feedback-btn:disabled { cursor: default; opacity: 0.5; }
 
     /* ── NPS (popup occasionnelle) ────────────────────────────── */
     .nps-scale { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; justify-content: center; }
-    .nps-score-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--color-border-input);
+    .nps-score-btn { width: 34px; height: 34px; border-radius: var(--radius-8); border: 1px solid var(--color-border-input);
                      background: var(--color-bg-surface); cursor: pointer; font-size: 13px; }
     .nps-score-btn:hover { background: var(--color-bg-hover); }
     .nps-score-btn.chosen { background: var(--color-primary); color: var(--color-bg-surface); border-color: var(--color-primary); }
@@ -1107,13 +1107,13 @@
         <button class="modal-close" onclick="closeSuggestionModal()" aria-label="Fermer">✕</button>
         <p style="font-weight:600;font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>Suggérer une idée</p>
         <p style="font-size:13px;color:var(--color-text-muted);margin-bottom:12px;">Une amélioration à proposer, un bug à signaler ? Dites-nous tout — votre suggestion est envoyée de façon anonyme par défaut.</p>
-        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid var(--color-border-input);border-radius:8px;font-size:13px;margin-bottom:10px;">
+        <select id="suggestion-category" style="width:100%;padding:8px;border:1px solid var(--color-border-input);border-radius:var(--radius-8);font-size:13px;margin-bottom:10px;">
           <option value="idea">Idée / amélioration</option>
           <option value="bug">Bug</option>
           <option value="other">Autre</option>
         </select>
         <textarea id="suggestion-text" rows="5" placeholder="Votre suggestion…"
-                  style="width:100%;padding:10px;border:1px solid var(--color-border-input);border-radius:8px;font:inherit;font-size:13px;resize:vertical;"></textarea>
+                  style="width:100%;padding:10px;border:1px solid var(--color-border-input);border-radius:var(--radius-8);font:inherit;font-size:13px;resize:vertical;"></textarea>
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--color-text-secondary);cursor:pointer;">
           <input type="checkbox" id="suggestion-not-anonymous" />
           Ne pas rester anonyme (associer mon identité à cette suggestion)
@@ -1986,7 +1986,7 @@
         </div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="new-collection-name" placeholder="Nouvelle collection…"
-                 style="flex:1;padding:8px 10px;border:1px solid var(--color-border-input);border-radius:8px;font-size:13px;" />
+                 style="flex:1;padding:8px 10px;border:1px solid var(--color-border-input);border-radius:var(--radius-8);font-size:13px;" />
           <button class="btn-primary" id="create-collection-btn">Créer</button>
         </div>`;
       card.querySelectorAll('[data-collection-id]').forEach(btn => {
@@ -2108,7 +2108,7 @@
       const keywordsAddHtml = canEditKeywords ? `
         <div style="display:flex;gap:6px;width:100%;">
           <input type="text" id="new-keyword-input" placeholder="Ajouter un ou plusieurs mots-clés (séparés par ;)…"
-                 style="flex:1;padding:4px 8px;border:1px solid var(--color-border-input);border-radius:6px;font-size:12px;"
+                 style="flex:1;padding:4px 8px;border:1px solid var(--color-border-input);border-radius:var(--radius-6);font-size:12px;"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();addDocKeyword('${id}');}" />
           <button class="secondary" onclick="addDocKeyword('${id}')" style="padding:4px 10px;font-size:12px;">Ajouter</button>
         </div>` : '';
