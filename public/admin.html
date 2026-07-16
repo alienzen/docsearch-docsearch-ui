@@ -237,21 +237,23 @@
       return res.json();
     }
 
-    // Même bascules que index.html (show_current_user_enabled/
-    // show_current_user_groups_enabled, voir docsearch-api/ui_config.py) —
-    // uiConfigCache est rempli par renderUiConfig() (dans refresh()),
-    // currentUserCache par loadCurrentUser() ; les deux tournent en
-    // parallèle (voir refresh()/loadCurrentUser() tout en bas), d'où
-    // updateCurrentUserBadge() appelée des deux côtés pour rester correct
-    // quel que soit l'ordre de résolution.
-    let uiConfigCache = { show_current_user_enabled: true, show_current_user_groups_enabled: true };
+    // Bascules PROPRES à admin.html (show_current_user_enabled_admin/
+    // show_current_user_groups_enabled_admin, voir docsearch-api/
+    // ui_config.py) — indépendantes des show_current_user_enabled/
+    // show_current_user_groups_enabled sans suffixe, qui ne couvrent que
+    // le badge de index.html. uiConfigCache est rempli par renderUiConfig()
+    // (dans refresh()), currentUserCache par loadCurrentUser() ; les deux
+    // tournent en parallèle (voir refresh()/loadCurrentUser() tout en bas),
+    // d'où updateCurrentUserBadge() appelée des deux côtés pour rester
+    // correct quel que soit l'ordre de résolution.
+    let uiConfigCache = { show_current_user_enabled_admin: true, show_current_user_groups_enabled_admin: true };
     let currentUserCache = { user: null, groups: [] };
 
     function updateCurrentUserBadge() {
       const el = document.getElementById('current-user');
-      el.style.display = uiConfigCache.show_current_user_enabled ? '' : 'none';
+      el.style.display = uiConfigCache.show_current_user_enabled_admin ? '' : 'none';
       if (!currentUserCache.user) return;
-      const groupsSuffix = (uiConfigCache.show_current_user_groups_enabled && currentUserCache.groups.length)
+      const groupsSuffix = (uiConfigCache.show_current_user_groups_enabled_admin && currentUserCache.groups.length)
         ? ` · ${currentUserCache.groups.join(', ')}`
         : '';
       el.textContent = `Connecté : ${currentUserCache.user}${groupsSuffix}`;
@@ -562,13 +564,25 @@
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-show-user" ${cfg.show_current_user_enabled ? 'checked' : ''} />
-              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête (recherche et administration)
+              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête de recherche
             </label>
           </div>
           <div class="row">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
               <input type="checkbox" id="ui-show-user-groups" ${cfg.show_current_user_groups_enabled ? 'checked' : ''} />
-              Inclure les groupes LDAP dans ce badge ("· &lt;groupes&gt;")
+              Inclure les groupes LDAP dans ce badge de recherche ("· &lt;groupes&gt;")
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-show-user-admin" ${cfg.show_current_user_enabled_admin ? 'checked' : ''} />
+              Badge "Connecté : &lt;utilisateur&gt;" dans l'en-tête d'administration (cette page)
+            </label>
+          </div>
+          <div class="row">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ui-show-user-groups-admin" ${cfg.show_current_user_groups_enabled_admin ? 'checked' : ''} />
+              Inclure les groupes LDAP dans ce badge d'administration ("· &lt;groupes&gt;")
             </label>
           </div>`;
       return panelWrap('ui-config-panel', 'Interface', "effectif immédiatement, pas de redémarrage", body);
@@ -656,28 +670,50 @@
           alert(`Erreur : ${err.message}`);
         }
       });
+      // ui-show-user/ui-show-user-groups pilotent le badge de index.html
+      // (pas celui de cette page, voir uiConfigCache/updateCurrentUserBadge()
+      // plus haut, qui ne lit que les variantes _admin) : pas de mise à
+      // jour locale du badge ici, juste la persistance du réglage.
       document.getElementById('ui-show-user')?.addEventListener('change', async (e) => {
         const checked = e.target.checked;
-        uiConfigCache.show_current_user_enabled = checked;
-        updateCurrentUserBadge();
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
-          uiConfigCache.show_current_user_enabled = !checked;
-          updateCurrentUserBadge();
           alert(`Erreur : ${err.message}`);
         }
       });
       document.getElementById('ui-show-user-groups')?.addEventListener('change', async (e) => {
         const checked = e.target.checked;
-        uiConfigCache.show_current_user_groups_enabled = checked;
-        updateCurrentUserBadge();
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_groups_enabled: checked }) });
         } catch (err) {
           e.target.checked = !checked;
-          uiConfigCache.show_current_user_groups_enabled = !checked;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-show-user-admin')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        uiConfigCache.show_current_user_enabled_admin = checked;
+        updateCurrentUserBadge();
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_enabled_admin: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          uiConfigCache.show_current_user_enabled_admin = !checked;
+          updateCurrentUserBadge();
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-show-user-groups-admin')?.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        uiConfigCache.show_current_user_groups_enabled_admin = checked;
+        updateCurrentUserBadge();
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ show_current_user_groups_enabled_admin: checked }) });
+        } catch (err) {
+          e.target.checked = !checked;
+          uiConfigCache.show_current_user_groups_enabled_admin = !checked;
           updateCurrentUserBadge();
           alert(`Erreur : ${err.message}`);
         }
