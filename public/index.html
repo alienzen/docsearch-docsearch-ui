@@ -707,7 +707,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true, theme: 'default' };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true, theme: 'default', sources_mount: '/sources', sources_mount_display: '' };
     let isAdminCache = false;
     // Rempli par loadIsAdmin() — séparé de uiConfigCache (qui ne porte que
     // des bascules) pour que updateCurrentUserText() puisse recalculer le
@@ -1539,6 +1539,34 @@
       document.body.removeChild(ta);
     }
 
+    // Remplace le préfixe SOURCES_MOUNT (chemin de montage interne aux
+    // conteneurs, ex: "/sources" — voir uiConfigCache.sources_mount,
+    // exposé en lecture seule par /ui-config) par la valeur admin
+    // configurable sources_mount_display (ex: "\\serveur\partage"), pour
+    // que le chemin copié soit réellement utilisable par l'utilisateur
+    // final. Vide (réglage par défaut) : chemin brut inchangé, comme
+    // avant l'ajout de ce réglage. Préfixe uniquement (pas de remplacement
+    // ailleurs dans la chaîne) pour ne pas toucher un membre d'archive
+    // ("archive.zip::inner/fichier.txt", voir dirOfPath()).
+    function displayPath(filepath) {
+      const display = uiConfigCache.sources_mount_display;
+      const mount   = uiConfigCache.sources_mount || '/sources';
+      if (!display || !filepath.startsWith(mount)) return filepath;
+      // "rest" commence toujours par un séparateur ("/tips/fichier.docx") :
+      // on retire un éventuel séparateur final sur "display" (ex: "Z:\\"
+      // ou "\\serveur\partage\\") pour ne pas le doubler à la jointure.
+      const base = display.replace(/[\\/]+$/, '');
+      let rest = filepath.slice(mount.length);
+      // Les chemins stockés dans ES gardent toujours des "/" (montage
+      // Linux, voir identity dans indexer.py), même quand la valeur
+      // affichée est un chemin Windows (UNC ou lecteur mappé) — sans ça
+      // on obtiendrait un mélange "\\serveur\partage/tips/fichier.docx".
+      if (display.includes('\\') && !display.includes('/')) {
+        rest = rest.replace(/\//g, '\\');
+      }
+      return base + rest;
+    }
+
     function dirOfPath(filepath) {
       // Pour un membre d'archive ("archive.zip::inner/fichier.txt"), le
       // dossier réel sur le disque est celui de l'archive elle-même, pas
@@ -1559,7 +1587,7 @@
 
     async function copyPathClick(e) {
       const btn      = e.currentTarget;
-      const filepath = btn.dataset.path;
+      const filepath = displayPath(btn.dataset.path);
       const text     = btn.dataset.copy === 'dir' ? dirOfPath(filepath) : filepath;
       try {
         await copyText(text);

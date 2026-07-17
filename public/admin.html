@@ -640,6 +640,11 @@
             <span class="muted">index.html, help.html</span>
           </div>
           <div class="row">
+            <label class="muted" for="ui-sources-mount-display">Chemin affiché ("Copier le chemin") :</label>
+            <input type="text" id="ui-sources-mount-display" placeholder="ex: \\\\serveur\\partage (vide = chemin brut &quot;${escapeHtml(cfg.sources_mount || '/sources')}&quot; inchangé)" value="${escapeHtml(cfg.sources_mount_display || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">remplace le préfixe "${escapeHtml(cfg.sources_mount || '/sources')}" (SOURCES_MOUNT), index.html</span>
+          </div>
+          <div class="row">
             <label class="muted" for="ui-theme-admin">Thème — Administration :</label>
             <select id="ui-theme-admin">
               <option value="default" ${cfg.theme_admin === 'default' || !cfg.theme_admin ? 'selected' : ''}>Clair</option>
@@ -811,6 +816,17 @@
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ theme }) });
           e.target.dataset.previous = theme;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-sources-mount-display')?.addEventListener('change', async (e) => {
+        const value = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ sources_mount_display: value }) });
+          e.target.dataset.previous = value;
         } catch (err) {
           e.target.value = previous;
           alert(`Erreur : ${err.message}`);
