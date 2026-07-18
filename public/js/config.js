@@ -20,7 +20,7 @@
     // en parallèle, d'où ces variables partagées plutôt qu'un seul appel :
     // même un utilisateur autorisé ne doit plus les voir si l'admin a
     // désactivé le flag (ex: pendant une maintenance des pages admin).
-    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true, theme: 'default', header_logo_url: '', favicon_url: '', sources_mount: '/sources', sources_mount_display: '' };
+    let uiConfigCache = { chat_enabled: true, footer_enabled: true, admin_links_enabled: true, export_enabled: true, help_enabled: true, collections_enabled: true, custom_keywords_enabled: true, alerts_enabled: true, sort_enabled: true, show_current_user_enabled: true, show_current_user_groups_enabled: true, theme: 'default', header_logo_url: '', header_logo_text: '', header_subtitle_text: '', favicon_url: '', footer_text: '', sources_mount: '/sources', sources_mount_display: '' };
     let isAdminCache = false;
     // Rempli par loadIsAdmin() — séparé de uiConfigCache (qui ne porte que
     // des bascules) pour que updateCurrentUserText() puisse recalculer le
@@ -95,6 +95,22 @@
       }
       const faviconEl = document.querySelector('link[rel="icon"]');
       if (faviconEl) faviconEl.href = uiConfigCache.favicon_url || '/favicon.svg';
+      // Titre/sous-titre/pied de page : texte codé en dur dans index.html
+      // conservé ici comme repli, au cas où /ui-config échoue (voir le
+      // bloc try/catch ci-dessus) — même principe que le monogramme du
+      // logo par défaut.
+      const headerTitle    = uiConfigCache.header_logo_text || 'DocSearch';
+      const headerSubtitle = uiConfigCache.header_subtitle_text || 'Explorez, trouvez, comprenez';
+      const titleEl = document.getElementById('header-title');
+      if (titleEl) titleEl.textContent = headerTitle;
+      const subtitleEl = document.getElementById('header-subtitle');
+      if (subtitleEl) subtitleEl.textContent = headerSubtitle;
+      // <title> de l'onglet : même concaténation que le repli de
+      // footer_text ci-dessous ("Titre — Sous-titre"), pour rester
+      // cohérent même quand footer_text a été personnalisé séparément.
+      document.title = `${headerTitle} — ${headerSubtitle}`;
+      const footerTextEl = document.getElementById('footer-text');
+      if (footerTextEl) footerTextEl.textContent = uiConfigCache.footer_text || 'DocSearch — Explorez, trouvez, comprenez';
       updateAdminLinksVisibility();
       updateCurrentUserVisibility();
       updateCurrentUserText();

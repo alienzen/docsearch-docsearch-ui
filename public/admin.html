@@ -646,9 +646,24 @@
             <span class="muted">src de .header-logo, index.html</span>
           </div>
           <div class="row">
+            <label class="muted" for="ui-header-title">Titre (en-tête) :</label>
+            <input type="text" id="ui-header-title" placeholder="DocSearch" value="${escapeHtml(cfg.header_logo_text || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">.header-title, index.html</span>
+          </div>
+          <div class="row">
+            <label class="muted" for="ui-header-subtitle">Sous-titre (en-tête) :</label>
+            <input type="text" id="ui-header-subtitle" placeholder="Explorez, trouvez, comprenez" value="${escapeHtml(cfg.header_subtitle_text || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">.header-subtitle, index.html</span>
+          </div>
+          <div class="row">
             <label class="muted" for="ui-favicon-url">Favicon personnalisé :</label>
             <input type="text" id="ui-favicon-url" placeholder="URL d'icône (vide = monogramme par défaut)" value="${escapeHtml(cfg.favicon_url || '')}" style="flex:1; min-width:260px;" />
             <span class="muted">onglet du navigateur, toutes les pages</span>
+          </div>
+          <div class="row">
+            <label class="muted" for="ui-footer-text">Texte du pied de page :</label>
+            <input type="text" id="ui-footer-text" placeholder="DocSearch — Explorez, trouvez, comprenez" value="${escapeHtml(cfg.footer_text || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">#page-footer, index.html — admin.html/stats.html/admin-help.html gardent leur propre texte</span>
           </div>
           <div class="row">
             <label class="muted" for="ui-sources-mount-display">Chemin affiché ("Copier le chemin") :</label>
@@ -843,12 +858,45 @@
           alert(`Erreur : ${err.message}`);
         }
       });
+      document.getElementById('ui-header-title')?.addEventListener('change', async (e) => {
+        const value = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ header_logo_text: value }) });
+          e.target.dataset.previous = value;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-header-subtitle')?.addEventListener('change', async (e) => {
+        const value = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ header_subtitle_text: value }) });
+          e.target.dataset.previous = value;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
       document.getElementById('ui-favicon-url')?.addEventListener('change', async (e) => {
         const url = e.target.value.trim();
         const previous = e.target.dataset.previous || '';
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ favicon_url: url }) });
           e.target.dataset.previous = url;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-footer-text')?.addEventListener('change', async (e) => {
+        const value = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ footer_text: value }) });
+          e.target.dataset.previous = value;
         } catch (err) {
           e.target.value = previous;
           alert(`Erreur : ${err.message}`);
