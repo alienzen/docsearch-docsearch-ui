@@ -902,8 +902,15 @@
     // web-worker continuent toujours normalement).
     const TYPE_LABELS = { file: 'Bureautique', sql: 'SQL', web: 'Web' };
 
+    // Cache de la dernière réponse /admin/all-sources — sert à préremplir
+    // le prompt d'édition des groupes autorisés (wireAllSources n'a accès
+    // qu'au DOM des cases à cocher, pas à allowed_groups qui n'a pas de
+    // représentation visuelle équivalente à une case à cocher).
+    let allSourcesCache = {};
+
     async function renderAllSources() {
       const sources = await api('/admin/all-sources');
+      allSourcesCache = sources;
       const rows = Object.entries(sources)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, s]) => `
@@ -926,13 +933,22 @@
               <span class="muted">${s.collectable ? 'autorisée' : 'bloquée'}</span>
             </label>
           </td>
+          <td>
+            <span class="muted">${(s.allowed_groups && s.allowed_groups.length) ? escapeHtml(s.allowed_groups.join(', ')) : 'tout le monde'}</span>
+            <button class="secondary src-edit-groups" title="Modifier les groupes autorisés" style="margin-left:6px;">✏️</button>
+          </td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
-          </table>`;
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th><th>Groupes autorisés</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+          </table>
+          <p class="muted" style="margin-top:8px;">
+            "Groupes autorisés" restreint la visibilité de la source dans /search aux membres
+            d'un des groupes AD/LDAP listés (vide = tout le monde, comportement par défaut) —
+            n'affecte ni l'ingestion ni l'accès aux documents individuels déjà partagés par ACL.
+          </p>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
 
@@ -1011,6 +1027,32 @@
             label.textContent = collectable ? 'autorisée' : 'bloquée';
           } catch (err) {
             e.target.checked = !collectable;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
+        });
+      });
+      document.querySelectorAll('.src-edit-groups').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tr = e.target.closest('tr');
+          const name = tr.dataset.name;
+          const type = tr.dataset.type;
+          const current = (allSourcesCache[name]?.allowed_groups || []).join(', ');
+          const value = prompt(
+            `Groupes AD/LDAP autorisés à voir la source '${name}' dans /search, séparés par des virgules ` +
+            `(vide = tout le monde) :`,
+            current,
+          );
+          if (value === null) return;
+          const allowed_groups = value.split(',').map(g => g.trim().toLowerCase()).filter(Boolean);
+          e.target.disabled = true;
+          try {
+            await api(`/admin/all-sources/${encodeURIComponent(name)}/groups?type=${type}`, {
+              method: 'POST', body: JSON.stringify({ allowed_groups }),
+            });
+            await refresh();
+          } catch (err) {
             alert(`Erreur : ${err.message}`);
           } finally {
             e.target.disabled = false;
@@ -1436,28 +1478,43 @@
 
     async function renderWebSources() {
       webSourcesCache = await api('/admin/web-sources');
+      // Table condensée à 8 colonnes (contre 12 auparavant) : index de
+      // crawl et index ES final regroupés dans une seule cellule
+      // "pipeline" (leur relation — l'un alimente l'autre — se lit d'un
+      // coup d'œil au lieu d'être éclatée sur deux colonnes) ; édition du
+      // libellé/description ramenée à un bouton ✏️ dans la cellule
+      // concernée plutôt qu'une colonne dédiée par action (même
+      // convention que les groupes autorisés dans "Toutes les sources") ;
+      // suspendre/reprendre fusionné en une seule bascule (case à cocher
+      // + libellé d'état), au lieu d'un bouton et d'une colonne de statut
+      // séparés.
       const rows = Object.entries(webSourcesCache).map(([name, s]) => `
         <tr data-name="${name}">
           <td>${name}</td>
-          <td>${s.label}</td>
-          <td class="muted">${s.crawl_index}</td>
-          <td>${s.es_index}</td>
+          <td>
+            ${escapeHtml(s.label)}
+            <button class="secondary web-src-edit-label" title="Modifier le libellé" style="padding:2px 7px;margin-left:4px;">✏️</button>
+          </td>
+          <td class="muted">${s.crawl_index} → ${s.es_index}</td>
           <td>${s.acl_public ? 'public' : 'privé'}</td>
           <td style="text-align:right;">${s.poll_interval_seconds}s</td>
-          <td class="muted">${s.description || ''}</td>
-          <td>${s.paused
-            ? '<span class="muted">⏸ suspendu</span>'
-            : '<span style="color:var(--color-success);">▶ actif</span>'}</td>
-          <td><button class="secondary web-src-toggle-pause">${s.paused ? 'Reprendre' : 'Suspendre'}</button></td>
-          <td><button class="secondary web-src-edit-label">Modifier le libellé</button></td>
-          <td><button class="secondary web-src-edit-description">Modifier la description</button></td>
+          <td class="muted">
+            ${escapeHtml(s.description || '')}
+            <button class="secondary web-src-edit-description" title="Modifier la description" style="padding:2px 7px;margin-left:4px;">✏️</button>
+          </td>
+          <td>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" class="web-src-active" ${s.paused ? '' : 'checked'} />
+              <span class="muted">${s.paused ? 'suspendu' : 'actif'}</span>
+            </label>
+          </td>
           <td><button class="danger web-src-delete">Retirer</button></td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Nom</th><th>Libellé</th><th>Index de crawl</th><th>Index ES final</th><th>ACL</th><th>Intervalle</th><th>Description</th><th>Crawl</th><th></th><th></th><th></th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="12" class="muted">Aucune source web.</td></tr>'}</tbody>
+            <thead><tr><th>Nom</th><th>Libellé</th><th>Crawl → Index ES</th><th>ACL</th><th>Intervalle</th><th>Description</th><th>Crawl</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source web.</td></tr>'}</tbody>
           </table>
           <p class="muted" style="margin-top:8px;">
             « Suspendre » arrête la RÉPERCUSSION vers DocSearch (web-worker cesse de relire l'index
@@ -1465,8 +1522,12 @@
             continue, n'est pas piloté depuis cette interface et continue son cycle indépendamment.
           </p>
           <div style="margin-top:14px;">
+            <div class="muted" style="font-weight:600;margin-bottom:6px;">Ajouter une source</div>
             <div class="row">
               <input type="text" id="new-web-name" placeholder="nom (ex: cc_decisions)" />
+              <input type="text" id="new-web-label" placeholder="libellé (optionnel)" />
+            </div>
+            <div class="row">
               <input type="text" id="new-web-crawlindex" placeholder="index de crawl (output_index du crawler)" />
               <input type="text" id="new-web-esindex" placeholder="index ES final (ex: cc_decisions)" />
             </div>
@@ -1474,12 +1535,11 @@
               <label class="muted" for="new-web-public">Contenu public (sans authentification)</label>
               <input type="checkbox" id="new-web-public" checked style="flex:0;" />
               <input type="number" id="new-web-interval" placeholder="intervalle (s)" value="3600" min="30" style="max-width:130px;" />
-              <input type="text" id="new-web-label" placeholder="libellé (optionnel)" />
             </div>
             <div class="row">
               <input type="text" id="new-web-description" placeholder="description (optionnel)" />
+              <button id="add-web-source">Ajouter</button>
             </div>
-            <button id="add-web-source">Ajouter</button>
           </div>
           <p class="muted" style="margin-top:8px;">
             L'index de crawl doit correspondre au <code>output_index</code> déclaré dans la config
@@ -1490,16 +1550,24 @@
     }
 
     function wireWebSources() {
-      document.querySelectorAll('.web-src-toggle-pause').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+      document.querySelectorAll('.web-src-active').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
           const tr = e.target.closest('tr');
           const name = tr.dataset.name;
-          const currentlyPaused = e.target.textContent.trim() === 'Reprendre';
-          await api(`/admin/web-sources/${encodeURIComponent(name)}/pause`, {
-            method: 'POST',
-            body: JSON.stringify({ paused: !currentlyPaused }),
-          });
-          await refresh();
+          const active = e.target.checked;
+          const label = e.target.nextElementSibling;
+          e.target.disabled = true;
+          try {
+            await api(`/admin/web-sources/${encodeURIComponent(name)}/pause`, {
+              method: 'POST', body: JSON.stringify({ paused: !active }),
+            });
+            label.textContent = active ? 'actif' : 'suspendu';
+          } catch (err) {
+            e.target.checked = !active;
+            alert(`Erreur : ${err.message}`);
+          } finally {
+            e.target.disabled = false;
+          }
         });
       });
       document.querySelectorAll('.web-src-edit-label').forEach(btn => {
