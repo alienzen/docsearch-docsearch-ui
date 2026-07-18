@@ -1,0 +1,31 @@
+/* ── Personnalisation manuelle des .result-card par source ──────────
+   Chaque carte de résultat porte maintenant un attribut
+   data-source="<clé technique de la source>" (ex: "sharepoint_rh",
+   pas le libellé affiché — voir name dans file_sources_config.py /
+   web_sources_config.py / sql_sources_config.py côté API).
+
+   Ce fichier est chargé après index.css (voir index.html) : toute
+   règle ici l'emporte sur le style par défaut, sans avoir à toucher
+   index.css (donc sans risque de perte au prochain déploiement/mise
+   à jour de ce fichier).
+
+   Exemples ci-dessous — à adapter avec les vraies clés de vos sources
+   (visibles via l'attribut data-source dans l'inspecteur du
+   navigateur, ou dans l'admin des sources). */
+
+/*
+.result-card[data-source="sharepoint_rh"] {
+  border-left: 4px solid #0C447C;
+}
+.result-card[data-source="sharepoint_rh"] .result-title {
+  color: #0C447C;
+}
+
+.result-card[data-source="partage_dg"] {
+  background: #FFF9EC;
+}
+
+.result-card[data-source="archives_2019"] .ext-icon {
+  opacity: 0.6;
+}
+*/

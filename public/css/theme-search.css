@@ -330,6 +330,13 @@
   --color-accent-bg:      #f5f5fe;
   --font-family:          'Marianne', Arial, sans-serif;
 
+  /* Jeton DSFR réel, valeur vérifiée en direct (getComputedStyle sur
+     systeme-de-design.gouv.fr, --background-contrast-blue-france) plutôt
+     que reprise de mémoire — légèrement plus soutenu que --color-accent-bg
+     (#ececfe vs #f5f5fe), ce n'est pas un doublon. Utilisé pour le
+     dégradé de fond de .container, voir index.html. */
+  --background-contrast-blue-france: #ececfe;
+
   /* Couleur de focus officielle DSFR (@gouvfr/dsfr 1.14.4, règle
      générique ":focus" du core) — déjà reprise en dur pour #q plus haut
      dans index.html ; centralisée ici pour n'avoir qu'une source. */
