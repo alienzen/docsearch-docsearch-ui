@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>DocSearch — Statistiques de recherche</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/theme-admin.css" />
+  <link rel="stylesheet" href="/css/theme-admin.css" />
   <script>
     // Applique tout de suite le dernier thème connu (cache localStorage,
     // par navigateur/poste) pour éviter un flash au thème par défaut le
@@ -568,6 +569,8 @@
       document.documentElement.dataset.theme = cfg.theme_admin || 'default';
       try { localStorage.setItem('docsearch-theme-admin', cfg.theme_admin || 'default'); } catch (e) {}
       document.getElementById('page-footer').style.display = cfg.footer_enabled_admin ? '' : 'none';
+      const faviconEl = document.querySelector('link[rel="icon"]');
+      if (faviconEl) faviconEl.href = cfg.favicon_url || '/favicon.svg';
     }).catch(() => {
       // Échec silencieux (API indisponible) : le thème mis en cache
       // (localStorage, appliqué plus haut) reste affiché ; le pied de

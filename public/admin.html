@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>DocSearch — Administration</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="/theme-admin.css" />
+  <link rel="stylesheet" href="/css/theme-admin.css" />
   <script>
     // Applique tout de suite le dernier thème connu (cache localStorage,
     // par navigateur/poste) pour éviter un flash au thème par défaut le
@@ -640,6 +641,16 @@
             <span class="muted">index.html, help.html</span>
           </div>
           <div class="row">
+            <label class="muted" for="ui-header-logo-url">Logo personnalisé (en-tête) :</label>
+            <input type="text" id="ui-header-logo-url" placeholder="URL d'image (vide = monogramme par défaut)" value="${escapeHtml(cfg.header_logo_url || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">src de .header-logo, index.html</span>
+          </div>
+          <div class="row">
+            <label class="muted" for="ui-favicon-url">Favicon personnalisé :</label>
+            <input type="text" id="ui-favicon-url" placeholder="URL d'icône (vide = monogramme par défaut)" value="${escapeHtml(cfg.favicon_url || '')}" style="flex:1; min-width:260px;" />
+            <span class="muted">onglet du navigateur, toutes les pages</span>
+          </div>
+          <div class="row">
             <label class="muted" for="ui-sources-mount-display">Chemin affiché ("Copier le chemin") :</label>
             <input type="text" id="ui-sources-mount-display" placeholder="ex: \\\\serveur\\partage (vide = chemin brut &quot;${escapeHtml(cfg.sources_mount || '/sources')}&quot; inchangé)" value="${escapeHtml(cfg.sources_mount_display || '')}" style="flex:1; min-width:260px;" />
             <span class="muted">remplace le préfixe "${escapeHtml(cfg.sources_mount || '/sources')}" (SOURCES_MOUNT), index.html</span>
@@ -816,6 +827,28 @@
         try {
           await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ theme }) });
           e.target.dataset.previous = theme;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-header-logo-url')?.addEventListener('change', async (e) => {
+        const url = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ header_logo_url: url }) });
+          e.target.dataset.previous = url;
+        } catch (err) {
+          e.target.value = previous;
+          alert(`Erreur : ${err.message}`);
+        }
+      });
+      document.getElementById('ui-favicon-url')?.addEventListener('change', async (e) => {
+        const url = e.target.value.trim();
+        const previous = e.target.dataset.previous || '';
+        try {
+          await api('/admin/ui-config', { method: 'POST', body: JSON.stringify({ favicon_url: url }) });
+          e.target.dataset.previous = url;
         } catch (err) {
           e.target.value = previous;
           alert(`Erreur : ${err.message}`);
@@ -1849,6 +1882,8 @@
         document.documentElement.dataset.theme = cfg.theme_admin || 'default';
         try { localStorage.setItem('docsearch-theme-admin', cfg.theme_admin || 'default'); } catch (e) {}
         document.getElementById('page-footer').style.display = cfg.footer_enabled_admin ? '' : 'none';
+        const faviconEl = document.querySelector('link[rel="icon"]');
+        if (faviconEl) faviconEl.href = cfg.favicon_url || '/favicon.svg';
       } catch (e) {
         // Échec silencieux (API indisponible) : le thème mis en cache
         // (localStorage, appliqué plus haut) reste affiché ; le pied de
