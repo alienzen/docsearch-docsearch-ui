@@ -853,69 +853,6 @@
       });
     }
 
-    // ── Gabarits d'affichage des résultats ────────────────────────
-    // Composition de chaque style nommé (voir la colonne "Affichage" du
-    // panneau "Toutes les sources", qui assigne une source à l'un de ces
-    // styles) — quels champs afficher, dépliable ou non. Une boucle sur
-    // les styles retournés par l'API, pas de bloc codé en dur par style :
-    // un nouveau style ajouté côté display_styles_config.py apparaît ici
-    // sans changement de ce fichier.
-    const DISPLAY_STYLE_LABELS = {
-      default: 'Défaut', compact: 'Compact', minimal: 'Minimal',
-      dense: 'Dense', essentiel: 'Essentiel', complet_sans_extrait: 'Complet sans extrait',
-    };
-    const DISPLAY_FIELD_LABELS = {
-      source: 'Source', author: 'Auteur', date_modified: 'Date', folder: 'Dossier',
-      size: 'Taille', acl_group: 'Groupe ACL', filepath: 'Chemin', snippet: 'Extrait',
-      telephone: 'Téléphone', bureau: 'Bureau', detail_button: 'Bouton "Voir le détail complet"',
-    };
-
-    async function renderDisplayStyles() {
-      const data = await api('/admin/display-styles');
-      const fields = data.allowed_fields;
-      const blocks = Object.entries(data.styles).map(([name, def]) => `
-        <div class="row" data-style="${name}" style="border-bottom:1px solid var(--color-bg-hover);padding-bottom:14px;margin-bottom:14px;">
-          <p style="font-weight:600;margin-bottom:8px;">${DISPLAY_STYLE_LABELS[name] || name}</p>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
-            ${fields.map(f => `
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
-                <input type="checkbox" class="style-field-cb" value="${f}" ${def.fields.includes(f) ? 'checked' : ''} />
-                ${DISPLAY_FIELD_LABELS[f] || f}
-              </label>`).join('')}
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;margin-bottom:10px;">
-            <input type="checkbox" class="style-expandable-cb" ${def.expandable ? 'checked' : ''} />
-            Dépliable (sinon clic direct vers la fiche détail)
-          </label>
-          <button class="secondary style-save-btn">Enregistrer</button>
-        </div>`).join('');
-      return panelWrap('display-styles-panel', 'Gabarits d\'affichage', "effectif immédiatement, pas de redémarrage", blocks);
-    }
-
-    function wireDisplayStyles() {
-      document.querySelectorAll('.style-save-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const row = e.target.closest('[data-style]');
-          const styleName = row.dataset.style;
-          const fields = Array.from(row.querySelectorAll('.style-field-cb:checked')).map(cb => cb.value);
-          const expandable = row.querySelector('.style-expandable-cb').checked;
-          btn.disabled = true;
-          const originalLabel = btn.textContent;
-          try {
-            await api(`/admin/display-styles/${encodeURIComponent(styleName)}`, {
-              method: 'POST', body: JSON.stringify({ fields, expandable }),
-            });
-            btn.textContent = 'Enregistré ✓';
-            setTimeout(() => { btn.textContent = originalLabel; }, 1500);
-          } catch (err) {
-            alert(`Erreur : ${err.message}`);
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
     // ── Toutes les sources (vue unifiée fichier/SQL/web) ─────────
     // Complète les panneaux CRUD dédiés (Sources fichiers / Sources SQL /
     // Sources web ci-dessous, qui gèrent chacun les champs propres à leur type)
@@ -933,18 +870,7 @@
     const TYPE_LABELS = { file: 'Bureautique', sql: 'SQL', web: 'Web' };
 
     async function renderAllSources() {
-      // Les options du menu "Affichage" viennent de /display-styles (pas
-      // d'énumération codée en dur ici) — sinon ce menu se retrouve
-      // désynchronisé du catalogue réel dès qu'un style est ajouté/retiré
-      // côté display_styles_config.py, comme il l'était resté figé à
-      // "default"/"compact" lors du passage à 6 styles.
-      const [sources, styleDefs] = await Promise.all([
-        api('/admin/all-sources'),
-        api('/display-styles'),
-      ]);
-      const styleOptionsHtml = (current) => Object.keys(styleDefs).map(name =>
-        `<option value="${name}" ${current === name ? 'selected' : ''}>${DISPLAY_STYLE_LABELS[name] || name}</option>`
-      ).join('');
+      const sources = await api('/admin/all-sources');
       const rows = Object.entries(sources)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, s]) => `
@@ -967,17 +893,12 @@
               <span class="muted">${s.collectable ? 'autorisée' : 'bloquée'}</span>
             </label>
           </td>
-          <td>
-            <select class="src-display-style">
-              ${styleOptionsHtml(s.display_style)}
-            </select>
-          </td>
         </tr>`).join('');
 
       const body = `
           <table>
-            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th><th>Affichage</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="9" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
+            <thead><tr><th>Source</th><th>Type</th><th>Index ES</th><th>Description</th><th style="text-align:right;">Documents</th><th style="text-align:right;">Taille</th><th>Recherche</th><th>Collections</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="muted">Aucune source enregistrée.</td></tr>'}</tbody>
           </table>`;
       return panelWrap('allsources-panel', 'Toutes les sources', 'documents bureautiques, web et SQL confondus', body);
     }
@@ -1057,26 +978,6 @@
             label.textContent = collectable ? 'autorisée' : 'bloquée';
           } catch (err) {
             e.target.checked = !collectable;
-            alert(`Erreur : ${err.message}`);
-          } finally {
-            e.target.disabled = false;
-          }
-        });
-      });
-      document.querySelectorAll('.src-display-style').forEach(sel => {
-        const previous = sel.value;
-        sel.addEventListener('change', async (e) => {
-          const tr = e.target.closest('tr');
-          const name = tr.dataset.name;
-          const type = tr.dataset.type;
-          const display_style = e.target.value;
-          e.target.disabled = true;
-          try {
-            await api(`/admin/all-sources/${encodeURIComponent(name)}/display-style?type=${type}`, {
-              method: 'POST', body: JSON.stringify({ display_style }),
-            });
-          } catch (err) {
-            e.target.value = previous;
             alert(`Erreur : ${err.message}`);
           } finally {
             e.target.disabled = false;
@@ -1828,11 +1729,10 @@
 
       const labels = ['Sources fichiers', 'État des composants', 'Types de fichiers',
                       'Paramètres opérationnels', 'Filtres de sous-dossiers', 'Sources SQL', 'Sources web',
-                      'Toutes les sources', 'Mesure de satisfaction', 'Interface', 'Gabarits d\'affichage'];
+                      'Toutes les sources', 'Mesure de satisfaction', 'Interface'];
       const results = [sourcesResult, ...await Promise.allSettled([
         renderStatus(), renderFiletypes(), renderConfig(), renderPathFilters(),
         renderSqlSources(), renderWebSources(), renderAllSources(), renderEngagement(), renderUiConfig(),
-        renderDisplayStyles(),
       ])];
 
       // Un 401/403 sur N'IMPORTE laquelle de ces routes signifie que le
@@ -1874,7 +1774,7 @@
         group('group-file-sources', 'Sources fichiers', [0, 2, 4], renderScan() + renderSourceTree()) +
         group('group-sql-sources', 'Sources SQL', [5]) +
         group('group-web-sources', 'Sources web', [6]) +
-        group('group-interface', 'Interface et engagement', [8, 9, 10, 3]);
+        group('group-interface', 'Interface et engagement', [8, 9, 3]);
 
       wireFileSources();
       wireSourceTree();
@@ -1886,7 +1786,6 @@
       wireAllSources();
       wireEngagement();
       wireUiConfig();
-      wireDisplayStyles();
       wireScan();
       updateToggleAllLabel();
     }
